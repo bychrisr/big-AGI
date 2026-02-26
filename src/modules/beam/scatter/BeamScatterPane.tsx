@@ -1,9 +1,10 @@
 import * as React from 'react';
 
 import type { SxProps } from '@mui/joy/styles/types';
-import { Box, Button, ButtonGroup, FormControl, Typography } from '@mui/joy';
+import { Box, Button, ButtonGroup, FormControl, Modal, ModalDialog, Typography } from '@mui/joy';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
+import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import PlusOneRoundedIcon from '@mui/icons-material/PlusOneRounded';
 import StopRoundedIcon from '@mui/icons-material/StopRounded';
@@ -15,6 +16,8 @@ import type { BeamStoreApi } from '../store-beam.hooks';
 import { BEAM_BTN_SX, SCATTER_COLOR, SCATTER_RAY_PRESETS } from '../beam.config';
 import { BeamScatterDropdown } from './BeamScatterPaneDropdown';
 import { beamPaneSx } from '../BeamCard';
+import { DebateMindSelector } from '../debate/DebateMindSelector';
+import type { DebateMind } from '../debate/DebateMindSelector';
 
 
 const scatterPaneSx: SxProps = {
@@ -65,14 +68,18 @@ export function BeamScatterPane(props: {
   isMobile: boolean,
   rayCount: number,
   setRayCount: (n: number) => void,
-  showRayAdd: boolean
+  showRayAdd: boolean,
   startEnabled: boolean,
   startBusy: boolean,
   startRestart: boolean,
   onStart: (restart: boolean) => void,
   onStop: () => void,
   onExplainerShow: () => any,
+  onDebateStart: (minds: DebateMind[]) => void,
 }) {
+
+  // state
+  const [showDebateSelector, setShowDebateSelector] = React.useState(false);
 
   const dropdownMemo = React.useMemo(() => (
     <BeamScatterDropdown
@@ -86,6 +93,19 @@ export function BeamScatterPane(props: {
   const handleStartClicked = React.useCallback((event: React.MouseEvent) => {
     onStart(!startRestart ? false : event.shiftKey);
   }, [onStart, startRestart]);
+
+  const handleDebateButtonClick = React.useCallback(() => {
+    setShowDebateSelector(true);
+  }, []);
+
+  const handleDebateSelectorStart = React.useCallback((minds: DebateMind[]) => {
+    setShowDebateSelector(false);
+    props.onDebateStart(minds);
+  }, [props]);
+
+  const handleDebateSelectorCancel = React.useCallback(() => {
+    setShowDebateSelector(false);
+  }, []);
 
   return (
     <Box sx={props.isMobile ? mobileScatterPaneSx : desktopScatterPaneSx}>
@@ -153,18 +173,34 @@ export function BeamScatterPane(props: {
 
       {/* Start / Stop buttons */}
       {!props.startBusy ? (
-        <TooltipOutlined slowEnter title={startRestart ? 'Shift + Click to re-run active Beams' : null} placement='top-end'>
-          <Button
-            // key='scatter-start' // used for animation triggering, which we don't have now
-            variant='solid' color={SCATTER_COLOR}
-            disabled={!props.startEnabled || props.startBusy} loading={props.startBusy}
-            endDecorator={<PlayArrowRoundedIcon />}
-            onClick={handleStartClicked}
-            sx={BEAM_BTN_SX}
-          >
-            Start
-          </Button>
-        </TooltipOutlined>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <TooltipOutlined slowEnter title={startRestart ? 'Shift + Click to re-run active Beams' : null} placement='top-end'>
+            <Button
+              // key='scatter-start' // used for animation triggering, which we don't have now
+              variant='solid' color={SCATTER_COLOR}
+              disabled={!props.startEnabled || props.startBusy} loading={props.startBusy}
+              endDecorator={<PlayArrowRoundedIcon />}
+              onClick={handleStartClicked}
+              sx={BEAM_BTN_SX}
+            >
+              Start
+            </Button>
+          </TooltipOutlined>
+
+          {/* Debate button */}
+          <TooltipOutlined slowEnter title='Debate com Minds — inicie um debate entre thought leaders' placement='top-end'>
+            <Button
+              variant='outlined'
+              color='primary'
+              disabled={!props.startEnabled}
+              startDecorator={<ForumRoundedIcon />}
+              onClick={handleDebateButtonClick}
+              sx={{ minWidth: 100 }}
+            >
+              Debate
+            </Button>
+          </TooltipOutlined>
+        </Box>
       ) : (
         <Button
           // key='scatter-stop'
@@ -176,6 +212,18 @@ export function BeamScatterPane(props: {
           Stop
           {/*{props.rayCount > props.raysReady && ` (${props.rayCount - props.raysReady})`}*/}
         </Button>
+      )}
+
+      {/* Debate Mind Selector Modal */}
+      {showDebateSelector && (
+        <Modal open onClose={handleDebateSelectorCancel}>
+          <ModalDialog sx={{ p: 0, overflow: 'hidden' }}>
+            <DebateMindSelector
+              onStart={handleDebateSelectorStart}
+              onCancel={handleDebateSelectorCancel}
+            />
+          </ModalDialog>
+        </Modal>
       )}
 
     </Box>
