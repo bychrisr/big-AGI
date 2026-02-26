@@ -16,35 +16,31 @@ fi
 for mind_dir in "$MINDS_DIR"/*/; do
   [ -d "$mind_dir" ] || continue
   mind=$(basename "$mind_dir")
+  mind_errors=0
 
-  # Check metadata.yaml exists
+  # metadata.yaml é opcional — apenas avisa se ausente
   if [ ! -f "$mind_dir/metadata.yaml" ]; then
-    echo "ERROR: $mind missing metadata.yaml"
-    errors=$((errors + 1))
-    continue
+    echo "WARN: $mind sem metadata.yaml (slug usado como fallback)"
   fi
 
-  # Check required fields in metadata.yaml
-  for field in "${REQUIRED_FIELDS[@]}"; do
-    if ! grep -q "^${field}:" "$mind_dir/metadata.yaml"; then
-      echo "ERROR: $mind/metadata.yaml missing required field: $field"
-      errors=$((errors + 1))
-    fi
-  done
-
-  # Check kb/ directory
-  if [ ! -d "$mind_dir/kb" ]; then
-    echo "ERROR: $mind missing kb/ directory"
-    errors=$((errors + 1))
-  fi
-
-  # Check system_prompts/ directory
+  # system_prompts/ é obrigatório — mind sem prompt não é utilizável
   if [ ! -d "$mind_dir/system_prompts" ]; then
-    echo "ERROR: $mind missing system_prompts/ directory"
+    echo "ERROR: $mind sem diretório system_prompts/"
     errors=$((errors + 1))
+    mind_errors=$((mind_errors + 1))
+  else
+    # Verifica que existe ao menos um arquivo .md no system_prompts/
+    prompt_count=$(find "$mind_dir/system_prompts/" -name "*.md" 2>/dev/null | wc -l)
+    if [ "$prompt_count" -eq 0 ]; then
+      echo "ERROR: $mind/system_prompts/ não tem nenhum arquivo .md"
+      errors=$((errors + 1))
+      mind_errors=$((mind_errors + 1))
+    fi
   fi
 
-  valid=$((valid + 1))
+  if [ "$mind_errors" -eq 0 ]; then
+    valid=$((valid + 1))
+  fi
 done
 
 echo ""

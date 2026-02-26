@@ -20,98 +20,105 @@ export interface MindMetadata {
   tokenBudget: number;
   source: 'shared' | 'custom';
   systemPromptPreview?: string;
+  systemPromptPath?: string;
   status?: string;
   category?: string;
 }
 
 
-function parseMetadataYaml(content: string): Record<string, unknown> {
-  // Parser YAML simples para campos básicos (sem dependência extra)
-  // Formato esperado: "key: value" ou "key:\n  - item"
-  const result: Record<string, unknown> = {};
-  const lines = content.split('\n');
-  let currentKey: string | null = null;
-  let inArray = false;
-  const currentArray: string[] = [];
+// Converte slug (ex: "alex_hormozi") em nome legível ("Alex Hormozi")
+function slugToName(slug: string): string {
+  return slug.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
 
-  for (const line of lines) {
-    if (line.startsWith('#') || line.trim() === '') continue;
 
-    const arrayMatch = line.match(/^  - (.+)$/);
-    if (arrayMatch && currentKey && inArray) {
-      currentArray.push(arrayMatch[1].trim());
-      continue;
-    }
-
-    if (currentKey && inArray && currentArray.length > 0) {
-      result[currentKey] = [...currentArray];
-      currentArray.length = 0;
-      inArray = false;
-      currentKey = null;
-    }
-
-    const keyValueMatch = line.match(/^(\w+):\s*(.*)$/);
-    if (keyValueMatch) {
-      const [, key, value] = keyValueMatch;
-      if (value.trim() === '') {
-        currentKey = key;
-        inArray = true;
-        currentArray.length = 0;
-      } else {
-        const cleaned = value.trim().replace(/^["']|["']$/g, '');
-        result[key] = cleaned;
-      }
-    }
+// Extrai um campo de YAML usando regex — robusto para múltiplos schemas sem parser completo
+function extractYamlField(content: string, ...keys: string[]): string | null {
+  for (const key of keys) {
+    // Tenta match em qualquer nível de indentação: "  key: value" ou "key: value"
+    const match = content.match(new RegExp(`(?:^|\\n)\\s*${key}:\\s*["']?([^"'\\n#]+?)["']?\\s*(?:\\n|$)`));
+    if (match?.[1]?.trim()) return match[1].trim();
   }
+  return null;
+}
 
-  if (currentKey && inArray && currentArray.length > 0) {
-    result[currentKey] = [...currentArray];
+
+// Escolhe o melhor arquivo de system prompt disponível no diretório
+// Ordem de preferência: main.md > COGNITIVE_OS.md > arquivos com "final" > qualquer .md
+function findBestSystemPrompt(promptsDir: string): string | null {
+  if (!fs.existsSync(promptsDir)) return null;
+
+  const files = fs.readdirSync(promptsDir).filter(f => f.endsWith('.md'));
+  if (files.length === 0) return null;
+
+  const priority = [
+    (f: string) => f === 'main.md',
+    (f: string) => f.toLowerCase() === 'cognitive_os.md',
+    (f: string) => f.toLowerCase().includes('final'),
+    (f: string) => f.toLowerCase().includes('system_prompt') || f.toLowerCase().includes('system-prompt'),
+    () => true, // qualquer .md como fallback
+  ];
+
+  for (const check of priority) {
+    const found = files.find(check);
+    if (found) return path.join(promptsDir, found);
   }
-
-  return result;
+  return null;
 }
 
 
 function readMindFromDir(mindDir: string, source: 'shared' | 'custom'): MindMetadata | null {
+  const slug = path.basename(mindDir);
   const metadataPath = path.join(mindDir, 'metadata.yaml');
 
-  if (!fs.existsSync(metadataPath)) {
-    console.warn(`[minds.reader] metadata.yaml ausente: ${metadataPath}`);
-    return null;
+  // Campos derivados do metadata.yaml (quando disponível) ou do nome do diretório
+  let id = slug;
+  let name = slugToName(slug);
+  let specialty = '';
+
+  if (fs.existsSync(metadataPath)) {
+    try {
+      const content = fs.readFileSync(metadataPath, 'utf-8');
+      // Suporta múltiplos schemas: flat (mind_id), nested (mind.slug), nested (mind.name)
+      id = extractYamlField(content, 'mind_id', 'slug') ?? slug;
+      name = extractYamlField(content, 'name') ?? slugToName(slug);
+      specialty = extractYamlField(content, 'role', 'domain', 'primary_use_case') ?? '';
+    } catch (err) {
+      console.warn(`[minds.reader] Erro ao ler metadata.yaml em ${mindDir}:`, err);
+    }
   }
 
-  try {
-    const content = fs.readFileSync(metadataPath, 'utf-8');
-    const data = parseMetadataYaml(content);
+  // Encontra o melhor system prompt disponível
+  const promptsDir = path.join(mindDir, 'system_prompts');
+  const systemPromptPath = findBestSystemPrompt(promptsDir);
+  let systemPromptPreview: string | undefined;
 
-    if (!data['id'] || !data['name'] || !data['specialty']) {
-      console.warn(`[minds.reader] metadata.yaml inválido em ${mindDir}: campos obrigatórios ausentes`);
-      return null;
-    }
-
-    // Ler preview do system prompt (primeiros 200 chars)
-    const systemPromptPath = path.join(mindDir, 'system_prompts', 'main.md');
-    let systemPromptPreview: string | undefined;
-    if (fs.existsSync(systemPromptPath)) {
+  if (systemPromptPath) {
+    try {
       const promptContent = fs.readFileSync(systemPromptPath, 'utf-8');
       systemPromptPreview = promptContent.slice(0, 200).replace(/\n/g, ' ').trim();
+    } catch {
+      // preview opcional — não falha
     }
+  }
 
-    return {
-      id: String(data['id']),
-      name: String(data['name']),
-      specialty: String(data['specialty']),
-      tags: Array.isArray(data['tags']) ? (data['tags'] as string[]) : [],
-      tokenBudget: Number(data['token_budget']) || 15000,
-      source,
-      systemPromptPreview,
-      status: data['status'] ? String(data['status']) : 'active',
-      category: data['category'] ? String(data['category']) : undefined,
-    };
-  } catch (err) {
-    console.warn(`[minds.reader] Erro ao ler ${metadataPath}:`, err);
+  // Skip minds sem nenhum system prompt (não estão prontos para uso)
+  if (!systemPromptPath) {
+    console.warn(`[minds.reader] Nenhum system prompt encontrado em ${mindDir} — ignorando`);
     return null;
   }
+
+  return {
+    id,
+    name,
+    specialty: specialty || slugToName(slug),
+    tags: [],
+    tokenBudget: 15000,
+    source,
+    systemPromptPreview,
+    systemPromptPath,
+    status: 'active',
+  };
 }
 
 
