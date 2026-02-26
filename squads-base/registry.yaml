@@ -1,0 +1,67 @@
+version: "3.0"
+updated_at: "2026-02-26"
+
+squads:
+  mmos-squad:
+    path: "squads-base/mmos-squad"
+    role: brain
+    description: "Hub cognitivo central — 27+ minds, debate engine, DNA Mental"
+    provides:
+      - minds
+      - debate_engine
+      - cognitive_analysis
+      - greenfield_pipeline
+    minds_count: 27
+    token_budget_worst_case: 60000  # Hormozi — maior KB
+
+  kaven-squad:
+    path: "users/chris_rodrigues/squads/kaven-squad"
+    role: project
+    owner: chris_rodrigues
+    description: "Squad do projeto Kaven — Steave como lead"
+    requires:
+      - mmos-squad
+
+  psicologia-squad:
+    path: "users/guilger_oliveira/squads/psicologia-squad"
+    role: project
+    owner: guilger_oliveira
+    description: "Squad de psicologia da Guilger"
+    requires:
+      - mmos-squad
+
+users:
+  chris_rodrigues:
+    tier: admin
+    display_name: "Chris Rodrigues"
+    squads:
+      - mmos-squad
+      - kaven-squad
+    minds_custom: "users/chris_rodrigues/minds/"
+    clone: "users/chris_rodrigues/clone/"
+
+  guilger_oliveira:
+    tier: user
+    display_name: "Guilger Oliveira"
+    squads:
+      - mmos-squad
+      - psicologia-squad
+    minds_custom: "users/guilger_oliveira/minds/"
+    clone: "users/guilger_oliveira/clone/"
+
+tiers:
+  admin:
+    description: "Acesso total — criar squads, minds, ver todos os projetos"
+    can_create_squads: true
+    can_create_minds: true
+    can_view_all_users: true
+  user:
+    description: "Acesso aos próprios projetos + minds compartilhados do MMOS"
+    can_create_squads: false
+    can_create_minds: false
+    can_view_all_users: false
+  guest:
+    description: "Somente leitura de minds públicos (futuro)"
+    can_create_squads: false
+    can_create_minds: false
+    can_view_all_users: false

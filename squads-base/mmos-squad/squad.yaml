@@ -1,0 +1,89 @@
+id: mmos-squad
+name: MMOS Squad
+version: "1.0"
+description: |
+  Hub cognitivo central do teamAI. Fornece acesso a 27+ minds (clones cognitivos
+  de thought leaders), debate engine, e análise cognitiva profunda.
+
+role: brain
+type: shared  # Compartilhado entre todos os usuários via symlink
+
+provides:
+  - minds           # 27+ clones cognitivos
+  - debate_engine   # debate_engine.py — debates estruturados entre minds
+  - cognitive_analysis
+  - greenfield_pipeline
+
+minds:
+  # Estratégicos
+  - id: elon_musk
+    speciality: "Moonshots, first principles, escala"
+  - id: sam_altman
+    speciality: "AI, startups, product"
+  - id: paul_graham
+    speciality: "Startups, escrita, product-market fit"
+  # Produto
+  - id: marty_cagan
+    speciality: "Product management, discovery, empowered teams"
+  - id: jeff_patton
+    speciality: "Story mapping, outcome-driven development"
+  # Growth
+  - id: seth_godin
+    speciality: "Marketing de permissão, tribos, remarkability"
+  - id: alex_hormozi
+    speciality: "Offer creation, monetização, crescimento agressivo"
+  - id: eugene_schwartz
+    speciality: "Copywriting, awareness levels, persuasão"
+  # Disruptivos (a definir via APEX scoring — Story 6.4)
+  - id: naval_ravikant
+    speciality: "Leverage, specific knowledge, riqueza"
+    status: candidate
+  - id: sahil_lavingia
+    speciality: "Indie SaaS, bootstrapped, solo builder"
+    status: candidate
+  # ... outros 17 minds a serem adicionados
+
+agents:
+  - id: steave
+    role: kaven-squad-lead
+    file: "agents/steave.md"
+  - id: atlas
+    role: architect
+    file: "agents/atlas.md"
+  - id: bolt
+    role: api-dev
+    file: "agents/bolt.md"
+  - id: pixel
+    role: frontend-dev
+    file: "agents/pixel.md"
+  - id: schema
+    role: db-engineer
+    file: "agents/schema.md"
+  - id: shield
+    role: qa
+    file: "agents/shield.md"
+  - id: deploy
+    role: devops
+    file: "agents/deploy.md"
+  - id: forge
+    role: module-creator
+    file: "agents/forge.md"
+  - id: alex
+    role: onboarding
+    file: "agents/alex-onboarding.md"
+
+token_budgets:
+  single_mind_target: 15000
+  growth_council_target: 60000    # 5 minds
+  oxford_debate_target: 80000     # 2 minds
+  context_window_max: 200000      # Claude Sonnet
+
+optimization_layers:
+  - name: kb_compression
+    description: "extract_relevant_chunks() — 40k → 5-8k tokens (~85% redução)"
+  - name: session_caching
+    description: "System prompt carregado 1x por sessão, turnos = delta"
+  - name: multi_persona_call
+    description: "Minds leves (<20k) em chamada única. NUNCA para Hormozi"
+  - name: session_persistence
+    description: "Supabase sessions — *resume [session_id]"
