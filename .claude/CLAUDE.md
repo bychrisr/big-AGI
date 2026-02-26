@@ -298,3 +298,24 @@ Fase 2 → este fork rodando com Auth Supabase + Beam/debates
 <!-- AIOS-MANAGED-END: teamai-context -->
 
 *Synkra AIOS Claude Code Configuration v2.0*
+
+<!-- AIOS-MANAGED-START: teamai-implementation-status -->
+## teamAI Implementation Status
+
+### Stories Completas (Ready for Review)
+Epics 1-6 implementados. 36 minds no MMOS (symlink → /home/bychrisr/projects/personal/mmos-squad/minds/).
+
+### Arquivos-chave implementados
+- `src/modules/teamai/store-minds.ts` — Zustand store que carrega minds e injeta em SystemPurposes
+- `src/data.ts` — SystemPurposeId estendido para string; SystemPurposes = Record<string,SystemPurposeData>
+- `app/api/minds/` — GET lista + GET :id (auth bypass em dev mode)
+- `app/api/debate/route.ts` — streaming Python subprocess
+- `supabase/migrations/` — 7 migrations (debate_sessions, user_api_keys, user_memories, user_clone, user_preferences, user_projects)
+- `squads-base/mmos-squad/debate_engine/` — Python debate engine + KB compression + session caching
+- `squads-base/mmos-squad/scripts/` — memory_store, silent_checkpoint, cross_project_context, steave_cross_project
+
+### Dev Mode
+- Middleware, /api/minds, /api/debate: bypass auth quando NEXT_PUBLIC_SUPABASE_URL não configurado
+- TEAMAI_REPO_PATH=path/to/teamAI controla leitura de minds
+- Dev server: npm run dev (porta 3000+)
+<!-- AIOS-MANAGED-END: teamai-implementation-status -->
