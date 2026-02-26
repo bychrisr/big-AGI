@@ -2,19 +2,19 @@ id: mmos-squad
 name: MMOS Squad
 version: "1.0"
 description: |
-  Hub cognitivo central do teamAI. Fornece acesso a 29 minds (clones cognitivos
+  Hub cognitivo central do teamAI. Fornece acesso a 32 minds (clones cognitivos
   de thought leaders), debate engine, e análise cognitiva profunda.
 
 role: brain
 type: shared  # Compartilhado entre todos os usuários via symlink
 
 provides:
-  - minds           # 29 clones cognitivos
+  - minds           # 32 clones cognitivos
   - debate_engine   # debate_engine.py — debates estruturados entre minds
   - cognitive_analysis
   - greenfield_pipeline
 
-minds_count: 29
+minds_count: 32
 
 minds:
   # Estratégicos (Tier 3)
@@ -75,27 +75,35 @@ minds:
     category: growth
     status: active
 
-  # Disruptivos candidatos (pendente APEX scoring — Story 6.4)
+  # Disruptivos — aprovados via APEX scoring (Story 6.4)
   - id: naval_ravikant
-    specialty: "Leverage, specific knowledge, riqueza"
+    specialty: "Leverage, specific knowledge, wealth vs. status"
     category: disruptivo
-    status: candidate
+    status: active
+    apex_score: 8.25
+  - id: justin_welsh
+    specialty: "Solo creator systems, LinkedIn, solopreneur $10M+"
+    category: disruptivo
+    status: active
+    apex_score: 8.25
   - id: sahil_lavingia
-    specialty: "Indie SaaS, bootstrapped, solo builder"
+    specialty: "Indie SaaS, bootstrapped, minimalist company"
     category: disruptivo
-    status: candidate
+    status: active
+    apex_score: 8.0
+  # Rejeitados APEX scoring (Story 6.4)
   - id: simon_sinek
     specialty: "Purpose, leadership, Start With Why"
     category: disruptivo
-    status: candidate
-  - id: justin_welsh
-    specialty: "Creator economy, LinkedIn, solopreneur"
-    category: disruptivo
-    status: candidate
+    status: rejected
+    apex_score: 6.5
+    rejection_reason: "Score abaixo de 7.0 + overlap com Lencioni"
   - id: dickie_bush
     specialty: "Ship 30, atomic writing, consistency"
     category: disruptivo
-    status: candidate
+    status: rejected
+    apex_score: 7.0
+    rejection_reason: "Redundância com Justin Welsh em criação de conteúdo"
 
   # Tech/AI
   - id: andrej_karpathy
