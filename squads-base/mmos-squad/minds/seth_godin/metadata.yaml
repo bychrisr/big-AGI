@@ -1,0 +1,15 @@
+id: "seth_godin"
+name: "Seth Godin"
+slug: "seth_godin"
+tier: 3
+category: "growth"
+specialty: "Marketing de permissão, tribos, remarkability"
+token_budget: 15000
+tags:
+  - marketing
+  - permission-marketing
+  - tribes
+  - remarkability
+  - branding
+status: "active"
+created_at: "2026-02-26"

@@ -2,46 +2,150 @@ id: mmos-squad
 name: MMOS Squad
 version: "1.0"
 description: |
-  Hub cognitivo central do teamAI. Fornece acesso a 27+ minds (clones cognitivos
+  Hub cognitivo central do teamAI. Fornece acesso a 29 minds (clones cognitivos
   de thought leaders), debate engine, e análise cognitiva profunda.
 
 role: brain
 type: shared  # Compartilhado entre todos os usuários via symlink
 
 provides:
-  - minds           # 27+ clones cognitivos
+  - minds           # 29 clones cognitivos
   - debate_engine   # debate_engine.py — debates estruturados entre minds
   - cognitive_analysis
   - greenfield_pipeline
 
+minds_count: 29
+
 minds:
-  # Estratégicos
+  # Estratégicos (Tier 3)
   - id: elon_musk
-    speciality: "Moonshots, first principles, escala"
+    specialty: "Moonshots, first principles, escala"
+    category: estrategico
+    status: active
   - id: sam_altman
-    speciality: "AI, startups, product"
+    specialty: "AI, startups, product-market fit"
+    category: estrategico
+    status: active
   - id: paul_graham
-    speciality: "Startups, escrita, product-market fit"
-  # Produto
+    specialty: "Startups, escrita, product-market fit"
+    category: estrategico
+    status: active
+  - id: peter_thiel
+    specialty: "Contrarian thinking, zero to one, competition"
+    category: estrategico
+    status: active
+  - id: reid_hoffman
+    specialty: "Network effects, scale, blitzscaling"
+    category: estrategico
+    status: active
+  - id: ben_horowitz
+    specialty: "Leadership, hard things, startup culture"
+    category: estrategico
+    status: active
+
+  # Produto (Tier 3)
   - id: marty_cagan
-    speciality: "Product management, discovery, empowered teams"
+    specialty: "Product management, discovery, empowered teams"
+    category: produto
+    status: active
   - id: jeff_patton
-    speciality: "Story mapping, outcome-driven development"
-  # Growth
+    specialty: "Story mapping, outcome-driven development"
+    category: produto
+    status: active
+
+  # Growth/Marketing (Tier 3)
   - id: seth_godin
-    speciality: "Marketing de permissão, tribos, remarkability"
+    specialty: "Marketing de permissão, tribos, remarkability"
+    category: growth
+    status: active
   - id: alex_hormozi
-    speciality: "Offer creation, monetização, crescimento agressivo"
+    specialty: "Offer creation, monetização, crescimento agressivo"
+    category: growth
+    status: active
   - id: eugene_schwartz
-    speciality: "Copywriting, awareness levels, persuasão"
-  # Disruptivos (a definir via APEX scoring — Story 6.4)
+    specialty: "Copywriting, awareness levels, persuasão"
+    category: growth
+    status: active
+  - id: gary_vaynerchuk
+    specialty: "Social media, hustle, attention economy"
+    category: growth
+    status: active
+  - id: ryan_holiday
+    specialty: "Stoicism, media strategy, growth hacking"
+    category: growth
+    status: active
+
+  # Disruptivos candidatos (pendente APEX scoring — Story 6.4)
   - id: naval_ravikant
-    speciality: "Leverage, specific knowledge, riqueza"
+    specialty: "Leverage, specific knowledge, riqueza"
+    category: disruptivo
     status: candidate
   - id: sahil_lavingia
-    speciality: "Indie SaaS, bootstrapped, solo builder"
+    specialty: "Indie SaaS, bootstrapped, solo builder"
+    category: disruptivo
     status: candidate
-  # ... outros 17 minds a serem adicionados
+  - id: simon_sinek
+    specialty: "Purpose, leadership, Start With Why"
+    category: disruptivo
+    status: candidate
+  - id: justin_welsh
+    specialty: "Creator economy, LinkedIn, solopreneur"
+    category: disruptivo
+    status: candidate
+  - id: dickie_bush
+    specialty: "Ship 30, atomic writing, consistency"
+    category: disruptivo
+    status: candidate
+
+  # Tech/AI
+  - id: andrej_karpathy
+    specialty: "Deep learning, AI systems, pedagogy"
+    category: tech
+    status: active
+  - id: lex_fridman
+    specialty: "AI research, long-form interviews, philosophy"
+    category: tech
+    status: active
+
+  # Produtividade/Conhecimento
+  - id: james_clear
+    specialty: "Atomic Habits, behavior change, systems"
+    category: produtividade
+    status: active
+  - id: tim_ferriss
+    specialty: "4-Hour Workweek, lifestyle design, self-experimentation"
+    category: produtividade
+    status: active
+  - id: tiago_forte
+    specialty: "Second Brain, PKM, building on knowledge"
+    category: produtividade
+    status: active
+  - id: david_perell
+    specialty: "Writing online, ideas, learning in public"
+    category: produtividade
+    status: active
+
+  # Outros
+  - id: alan_nicolas
+    specialty: "IA no Brasil, aplicações práticas, evangelismo AI"
+    category: outros
+    status: active
+  - id: dan_koe
+    specialty: "Digital business, one-person business, consciousness"
+    category: outros
+    status: active
+  - id: derek_sivers
+    specialty: "Minimalism, contrarian philosophy, startup wisdom"
+    category: outros
+    status: active
+  - id: charlie_munger
+    specialty: "Mental models, value investing, psychology of money"
+    category: outros
+    status: active
+  - id: jack_butcher
+    specialty: "Visual thinking, packaging ideas, leverage"
+    category: outros
+    status: active
 
 agents:
   - id: steave

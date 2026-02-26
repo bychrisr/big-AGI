@@ -1,0 +1,15 @@
+id: "ben_horowitz"
+name: "Ben Horowitz"
+slug: "ben_horowitz"
+tier: 3
+category: "estrategico"
+specialty: "Leadership, hard things, startup culture"
+token_budget: 15000
+tags:
+  - strategy
+  - leadership
+  - startup-culture
+  - management
+  - venture
+status: "active"
+created_at: "2026-02-26"

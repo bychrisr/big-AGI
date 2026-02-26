@@ -1,0 +1,14 @@
+id: "marty_cagan"
+name: "Marty Cagan"
+slug: "marty_cagan"
+tier: 3
+category: "produto"
+specialty: "Product management, discovery, empowered teams"
+token_budget: 15000
+tags:
+  - product-management
+  - discovery
+  - empowered-teams
+  - product
+status: "active"
+created_at: "2026-02-26"

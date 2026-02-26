@@ -11,7 +11,7 @@ squads:
       - debate_engine
       - cognitive_analysis
       - greenfield_pipeline
-    minds_count: 27
+    minds_count: 29
     token_budget_worst_case: 60000  # Hormozi — maior KB
 
   kaven-squad:

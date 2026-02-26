@@ -1,0 +1,15 @@
+id: "dickie_bush"
+name: "Dickie Bush"
+slug: "dickie_bush"
+tier: 3
+category: "disruptivo"
+specialty: "Ship 30, atomic writing, consistency"
+token_budget: 15000
+tags:
+  - writing
+  - ship-30
+  - atomic-writing
+  - consistency
+  - creator-economy
+status: "candidate"
+created_at: "2026-02-26"

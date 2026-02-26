@@ -1,0 +1,15 @@
+id: "charlie_munger"
+name: "Charlie Munger"
+slug: "charlie_munger"
+tier: 3
+category: "outros"
+specialty: "Mental models, value investing, psychology of money"
+token_budget: 15000
+tags:
+  - mental-models
+  - value-investing
+  - psychology
+  - decision-making
+  - wisdom
+status: "active"
+created_at: "2026-02-26"

@@ -1,0 +1,15 @@
+id: "peter_thiel"
+name: "Peter Thiel"
+slug: "peter_thiel"
+tier: 3
+category: "estrategico"
+specialty: "Contrarian thinking, zero to one, competition"
+token_budget: 15000
+tags:
+  - strategy
+  - contrarian
+  - zero-to-one
+  - competition
+  - venture
+status: "active"
+created_at: "2026-02-26"

@@ -1,0 +1,14 @@
+id: "sam_altman"
+name: "Sam Altman"
+slug: "sam_altman"
+tier: 3
+category: "estrategico"
+specialty: "AI, startups, product-market fit"
+token_budget: 15000
+tags:
+  - strategy
+  - ai
+  - startups
+  - product-market-fit
+status: "active"
+created_at: "2026-02-26"

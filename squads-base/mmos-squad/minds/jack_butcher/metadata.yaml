@@ -1,0 +1,15 @@
+id: "jack_butcher"
+name: "Jack Butcher"
+slug: "jack_butcher"
+tier: 3
+category: "outros"
+specialty: "Visual thinking, packaging ideas, leverage"
+token_budget: 15000
+tags:
+  - visual-thinking
+  - packaging-ideas
+  - leverage
+  - creator-economy
+  - design
+status: "active"
+created_at: "2026-02-26"
