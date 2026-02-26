@@ -59,6 +59,7 @@ class DebateEngine:
         kb_context: str,
         user_message: str,
         max_tokens: int | None = None,
+        topic: str = "",
     ) -> TurnResult:
         """Gera resposta de um mind para uma mensagem.
 
@@ -68,6 +69,7 @@ class DebateEngine:
             kb_context: Conteudo da knowledge base do mind.
             user_message: Mensagem do usuario para o mind responder.
             max_tokens: Limite de tokens na resposta. Default: 4096.
+            topic: Tópico do debate (informacional, usado pelo caller para KB compression).
 
         Returns:
             TurnResult com conteudo, contagem de tokens e modelo usado.
@@ -119,6 +121,7 @@ class DebateEngine:
         kb_context: str,
         user_message: str,
         max_tokens: int | None = None,
+        topic: str = "",
     ):
         """Gera resposta com streaming.
 
@@ -128,6 +131,7 @@ class DebateEngine:
             kb_context: Conteudo da knowledge base do mind.
             user_message: Mensagem do usuario.
             max_tokens: Limite de tokens na resposta.
+            topic: Tópico do debate (informacional, usado pelo caller para KB compression).
 
         Yields:
             Chunks de texto da resposta em streaming.

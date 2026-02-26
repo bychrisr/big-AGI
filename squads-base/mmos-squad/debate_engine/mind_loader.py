@@ -33,18 +33,26 @@ class MindLoader:
             raise FileNotFoundError(msg)
         return prompt_file.read_text(encoding="utf-8")
 
-    def load_kb(self, mind_slug: str) -> str:
-        """Carrega todos os chunks de KB do mind.
+    def load_kb(self, mind_slug: str, topic: str = "") -> str:
+        """Carrega KB do mind, comprimida por tópico se fornecido.
 
         Args:
             mind_slug: Slug do mind.
+            topic: Tópico do debate para filtrar relevância. Vazio = KB completa.
 
         Returns:
-            Conteudo concatenado da knowledge base. String vazia se KB nao existir.
+            Conteudo da knowledge base. String vazia se KB nao existir.
         """
+        from debate_engine.kb_compressor import extract_relevant_chunks
+
         kb_dir = self.base / mind_slug / "kb"
         if not kb_dir.exists():
             return ""
+
+        if topic:
+            return extract_relevant_chunks(kb_dir, topic)
+
+        # Sem tópico: retorna KB completa
         chunks = sorted(kb_dir.glob("*.md"))
         return "\n\n---\n\n".join(f.read_text(encoding="utf-8") for f in chunks)
 
