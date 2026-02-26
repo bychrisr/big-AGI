@@ -41,14 +41,22 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 
+// Dev mode: skip auth when Supabase is not configured
+const SUPABASE_ENABLED = Boolean(process.env['NEXT_PUBLIC_SUPABASE_URL']);
+
 export async function GET(request: NextRequest): Promise<NextResponse<{ minds: MindMetadata[] } | { error: string; message: string }>> {
-  // Autenticação: extrair user_id do JWT
-  const userId = await extractUserId(request);
-  if (!userId) {
-    return NextResponse.json(
-      { error: 'Unauthorized', message: 'Bearer token required' },
-      { status: 401 },
-    );
+  // Auth: skip in dev mode when Supabase is not configured
+  let userId: string | null = null;
+  if (SUPABASE_ENABLED) {
+    userId = await extractUserId(request);
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized', message: 'Bearer token required' },
+        { status: 401 },
+      );
+    }
+  } else {
+    userId = 'dev-user';
   }
 
   // Path base do repo teamAI (este próprio repo em desenvolvimento)

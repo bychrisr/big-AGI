@@ -12,6 +12,7 @@ import TelegramIcon from '@mui/icons-material/Telegram';
 
 import { SystemPurposeData, SystemPurposeExample, SystemPurposeId, SystemPurposes } from '../../../../data';
 
+import { fetchMindSystemPrompt, useMindsStore } from '~/modules/teamai/store-minds';
 import { YouTubeURLInput } from '~/modules/youtube/YouTubeURLInput';
 import { bareBonesPromptMixer } from '~/modules/persona/pmix/pmix';
 
@@ -125,6 +126,11 @@ export function PersonaSelector(props: {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [filteredIDs, setFilteredIDs] = React.useState<SystemPurposeId[] | null>(null);
   const [editMode, setEditMode] = React.useState(false);
+  const [loadingMindId, setLoadingMindId] = React.useState<string | null>(null);
+
+  // MMOS minds
+  const { minds, fetchMinds } = useMindsStore();
+  React.useEffect(() => { void fetchMinds(); }, [fetchMinds]);
 
 
   // external state
@@ -199,6 +205,27 @@ export function PersonaSelector(props: {
   }, [props.conversationId, setSystemPurposeId]);
 
   const toggleEditMode = React.useCallback(() => setEditMode(on => !on), []);
+
+  // MMOS mind handler: fetch full system prompt then activate as custom persona
+  const handleMindSelected = React.useCallback(async (mindId: string) => {
+    if (!setSystemPurposeId) return;
+
+    // If already registered in SystemPurposes with a preview, activate immediately
+    if (SystemPurposes[mindId]) {
+      setSystemPurposeId(props.conversationId, mindId);
+    }
+
+    // Fetch full system prompt in background and update
+    setLoadingMindId(mindId);
+    const fullPrompt = await fetchMindSystemPrompt(mindId);
+    setLoadingMindId(null);
+
+    if (fullPrompt && SystemPurposes[mindId]) {
+      SystemPurposes[mindId]!.systemMessage = fullPrompt;
+    }
+
+    setSystemPurposeId(props.conversationId, mindId);
+  }, [props.conversationId, setSystemPurposeId]);
 
 
   // Search (filtering)
@@ -331,6 +358,34 @@ export function PersonaSelector(props: {
             }}
           />
         )}
+
+        {/* MMOS Minds Section */}
+        {minds.length > 0 && (
+          <Box sx={{ gridColumn: '1 / -1', mt: 2, mb: 0.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Typography level='title-sm'>
+              MMOS Minds
+            </Typography>
+            <Typography level='body-xs' sx={{ color: 'text.tertiary' }}>
+              {minds.length} minds
+            </Typography>
+          </Box>
+        )}
+        {minds.map((mind) => {
+          const isActive = systemPurposeId === mind.id;
+          const isLoading = loadingMindId === mind.id;
+          const purpose = SystemPurposes[mind.id];
+          return (
+            <Tile
+              key={'mind-' + mind.id}
+              text={isLoading ? '...' : mind.name}
+              symbol={purpose?.symbol ?? '🧠'}
+              isActive={isActive}
+              isEditMode={false}
+              isHighlighted={false}
+              onClick={() => void handleMindSelected(mind.id)}
+            />
+          );
+        })}
 
 
         {/* [row -3] Description */}

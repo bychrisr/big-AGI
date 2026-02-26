@@ -19,7 +19,7 @@ npm run build  # next build runs compile+lint+types but stops at first type-erro
 
 ## Development Environment
 
-- Dev servers may be running on ports 3000, 3001, 3002, or 3003 (not always this app - other projects may occupy these ports). Never start or stop dev servers, let the user do it.
+- Dev servers may be running on ports 3000, 3001, 3002, or 3003 (not always this app - other projects may occupy these ports).
 - For runtime debugging, use `mcp__chrome-devtools` if present to launch a controlled Chrome instance against the running dev server - useful for console errors, network inspection, and React devtree.
 
 ## Architecture Overview

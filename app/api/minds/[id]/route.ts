@@ -36,6 +36,8 @@ async function extractUserId(request: NextRequest): Promise<string | null> {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const SUPABASE_ENABLED = Boolean(process.env['NEXT_PUBLIC_SUPABASE_URL']);
+
 
 interface MindDetailResponse {
   mind: MindMetadata;
@@ -52,13 +54,18 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse<MindDetailResponse | ErrorResponse>> {
-  // Auth
-  const userId = await extractUserId(request);
-  if (!userId) {
-    return NextResponse.json(
-      { error: 'Unauthorized', message: 'Bearer token required' },
-      { status: 401 },
-    );
+  // Auth: skip in dev mode
+  let userId: string | null = null;
+  if (SUPABASE_ENABLED) {
+    userId = await extractUserId(request);
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized', message: 'Bearer token required' },
+        { status: 401 },
+      );
+    }
+  } else {
+    userId = 'dev-user';
   }
 
   const { id: mindId } = await params;
