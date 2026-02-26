@@ -1,80 +1,29 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Dados de usuário (ficam no Supabase, não no Git)
+users/*/memories/
+users/*/projects/
 
-# Frontend Build: ignore API files disabled for this build
-/app/**/*.backup
+# Sources pesadas dos minds (ficam no Supabase Storage)
+squads-base/mmos-squad/minds/*/sources/
 
-# Supabase - ignored for now
-/supabase/
-/*.sql
-
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
-
-# testing
-/coverage
-
-# next.js
-/.next/
-/dist/
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# local env files
+# Runtime / ambiente
 .env
-.env.*
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-
-# other
-.idea/
-
-# Ingore k8s/env-secret.yaml
-./k8s/env-secret.yaml
-/certificates
-.env*.local
-/.run/dev (ENV).run.xml
-/src/modules/3rdparty/aider/scratch*
-
-# Ignore temporary CC files
-/tmpclaude*
-
-# Environment & Secrets (AIOS)
 .env.local
-.env.*.local
-*.key
+*.pyc
+__pycache__/
+.venv/
+venv/
+*.egg-info/
+dist/
+.pytest_cache/
 
-# Dependencies (AIOS)
+# Node (scripts utilitários)
 node_modules/
-
-# Build & Logs (AIOS)
-build/
+.next/
+next-env.d.ts
 *.log
 logs/
+.vercel
 
-# IDE & OS (AIOS)
+# OS
+.DS_Store
 Thumbs.db
-*.swp
-
-# AIOS Local (AIOS)
-.aios-core/local/
-.claude/settings.local.json
-.aios/install-log.txt
