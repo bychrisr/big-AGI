@@ -1,10 +1,11 @@
 import * as React from 'react';
 
-import { Box, Button, Checkbox, Chip, CircularProgress, Sheet, Typography } from '@mui/joy';
+import { Box, Button, Chip, CircularProgress, Sheet, Tab, TabList, Tabs, Typography } from '@mui/joy';
 import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 
 import { InlineError } from '~/common/components/InlineError';
+import { COUNCILS } from '~/modules/teamai/agentCommands';
 
 
 export interface DebateMind {
@@ -21,11 +22,17 @@ const MAX_MINDS = 6;
 export function DebateMindSelector(props: {
   onStart: (minds: DebateMind[]) => void;
   onCancel: () => void;
+  /** Mind IDs to pre-select on mount (e.g., from agent *consult-X command) */
+  preselectedIds?: string[];
+  /** Topic from agent command, shown as context */
+  topic?: string;
 }) {
 
   // state
   const [minds, setMinds] = React.useState<DebateMind[]>([]);
-  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(
+    () => new Set(props.preselectedIds ?? []),
+  );
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -83,6 +90,13 @@ export function DebateMindSelector(props: {
     });
   }, []);
 
+  const handleCouncilPreset = React.useCallback((councilKey: string) => {
+    const council = COUNCILS[councilKey];
+    if (council) {
+      setSelectedIds(new Set(council.mindIds));
+    }
+  }, []);
+
   const handleStart = React.useCallback(() => {
     const selected = minds.filter(m => selectedIds.has(m.id));
     if (selected.length >= MIN_MINDS) {
@@ -96,7 +110,7 @@ export function DebateMindSelector(props: {
 
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: 2, minWidth: 320 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: 2, minWidth: 360 }}>
 
       {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -104,8 +118,31 @@ export function DebateMindSelector(props: {
         <Box>
           <Typography level='title-md'>Debate com Minds</Typography>
           <Typography level='body-xs' sx={{ color: 'text.secondary' }}>
-            Selecione de {MIN_MINDS} a {MAX_MINDS} minds para o debate
+            {props.topic
+              ? `Tópico: ${props.topic}`
+              : `Selecione de ${MIN_MINDS} a ${MAX_MINDS} minds para o debate`}
           </Typography>
+        </Box>
+      </Box>
+
+      {/* Council presets */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+        <Typography level='body-xs' sx={{ color: 'text.tertiary', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Conselhos rápidos
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          {Object.entries(COUNCILS).map(([key, council]) => (
+            <Chip
+              key={key}
+              size='sm'
+              variant='soft'
+              color='neutral'
+              onClick={() => handleCouncilPreset(key)}
+              sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'primary.softBg' } }}
+            >
+              {council.icon} {council.name}
+            </Chip>
+          ))}
         </Box>
       </Box>
 
@@ -129,7 +166,7 @@ export function DebateMindSelector(props: {
       {!loading && minds.length > 0 && (
         <Sheet
           variant='outlined'
-          sx={{ borderRadius: 'sm', overflow: 'auto', maxHeight: 320 }}
+          sx={{ borderRadius: 'sm', overflow: 'auto', maxHeight: 280 }}
         >
           {minds.map(mind => {
             const isSelected = selectedIds.has(mind.id);
@@ -152,13 +189,7 @@ export function DebateMindSelector(props: {
                   backgroundColor: isSelected ? 'primary.softBg' : undefined,
                 }}
               >
-                <Checkbox
-                  checked={isSelected}
-                  disabled={isDisabled}
-                  onChange={() => handleToggle(mind.id)}
-                  size='sm'
-                  sx={{ mt: 0.25 }}
-                />
+                <Box sx={{ mt: 0.25, width: 16, height: 16, borderRadius: 'sm', border: '2px solid', borderColor: isSelected ? 'primary.500' : 'neutral.400', bgcolor: isSelected ? 'primary.500' : 'transparent', flexShrink: 0 }} />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography level='title-sm' noWrap>{mind.name}</Typography>
                   <Typography level='body-xs' sx={{ color: 'text.secondary' }} noWrap>

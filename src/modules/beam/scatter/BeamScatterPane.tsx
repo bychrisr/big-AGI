@@ -18,6 +18,7 @@ import { BeamScatterDropdown } from './BeamScatterPaneDropdown';
 import { beamPaneSx } from '../BeamCard';
 import { DebateMindSelector } from '../debate/DebateMindSelector';
 import type { DebateMind } from '../debate/DebateMindSelector';
+import { useDebateTriggerStore } from '~/modules/teamai/store-debate-trigger';
 
 
 const scatterPaneSx: SxProps = {
@@ -80,6 +81,19 @@ export function BeamScatterPane(props: {
 
   // state
   const [showDebateSelector, setShowDebateSelector] = React.useState(false);
+  const [pendingPreselected, setPendingPreselected] = React.useState<string[] | undefined>(undefined);
+  const [pendingTopic, setPendingTopic] = React.useState<string | undefined>(undefined);
+
+  // listen for agent-triggered council debates (from *consult-X commands in Composer)
+  const { pending: debateTrigger, clearPending } = useDebateTriggerStore();
+  React.useEffect(() => {
+    if (debateTrigger) {
+      setPendingPreselected(debateTrigger.mindIds);
+      setPendingTopic(debateTrigger.topic || undefined);
+      setShowDebateSelector(true);
+      clearPending();
+    }
+  }, [debateTrigger, clearPending]);
 
   const dropdownMemo = React.useMemo(() => (
     <BeamScatterDropdown
@@ -95,16 +109,22 @@ export function BeamScatterPane(props: {
   }, [onStart, startRestart]);
 
   const handleDebateButtonClick = React.useCallback(() => {
+    setPendingPreselected(undefined);
+    setPendingTopic(undefined);
     setShowDebateSelector(true);
   }, []);
 
   const handleDebateSelectorStart = React.useCallback((minds: DebateMind[]) => {
     setShowDebateSelector(false);
+    setPendingPreselected(undefined);
+    setPendingTopic(undefined);
     props.onDebateStart(minds);
   }, [props]);
 
   const handleDebateSelectorCancel = React.useCallback(() => {
     setShowDebateSelector(false);
+    setPendingPreselected(undefined);
+    setPendingTopic(undefined);
   }, []);
 
   return (
@@ -221,6 +241,8 @@ export function BeamScatterPane(props: {
             <DebateMindSelector
               onStart={handleDebateSelectorStart}
               onCancel={handleDebateSelectorCancel}
+              preselectedIds={pendingPreselected}
+              topic={pendingTopic}
             />
           </ModalDialog>
         </Modal>

@@ -58,6 +58,8 @@ import { LLMAttachmentDraftsAction, LLMAttachmentsList } from './llmattachments/
 import { PhPaintBrush } from '~/common/components/icons/phosphor/PhPaintBrush';
 import { useAttachmentDrafts } from '~/common/attachment-drafts/useAttachmentDrafts';
 import { detectAndSaveMemory } from '~/modules/teamai/detectAndSaveMemory';
+import { parseAgentCommand, isAgentPersona, COUNCILS } from '~/modules/teamai/agentCommands';
+import { useDebateTriggerStore } from '~/modules/teamai/store-debate-trigger';
 import { useLLMAttachmentDrafts } from './llmattachments/useLLMAttachmentDrafts';
 
 import type { ChatExecuteMode } from '../../execute-mode/execute-mode.types';
@@ -457,8 +459,26 @@ export function Composer(props: {
       addSnackbar({ key: 'chat-mic-running', message: 'Please wait for the microphone to finish.', type: 'info' });
       return;
     }
+
+    // Agent command detection: *consult-growth/product or *think when agent persona active
+    const agentCmd = parseAgentCommand(composeText);
+    if (agentCmd && isAgentPersona(systemPurposeId)) {
+      const council = COUNCILS[agentCmd.council];
+      if (council) {
+        useDebateTriggerStore.getState().setPending({
+          council: agentCmd.council,
+          topic: agentCmd.topic,
+          mindIds: council.mindIds,
+        });
+        _handleClearText();
+        // Open beam to show DebateMindSelector with council pre-selected
+        await handleSendAction('beam-content', agentCmd.topic || `Reunião do ${council.name}`);
+        return;
+      }
+    }
+
     await handleSendAction(chatExecuteMode, composeText); // 'chat/write/...' button
-  }, [chatExecuteMode, composeText, handleFinishMicAndSend, handleSendAction, micIsRunning, recognitionState.isActive]);
+  }, [chatExecuteMode, composeText, handleFinishMicAndSend, handleSendAction, micIsRunning, recognitionState.isActive, systemPurposeId, _handleClearText]);
 
   const handleSendTextBeamClicked = React.useCallback(async () => {
     if (micIsRunning) {
