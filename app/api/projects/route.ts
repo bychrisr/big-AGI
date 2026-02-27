@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { createSupabaseServerClient } from '~/common/supabase/server';
+import { extractPatterns } from '~/server/projects/extract-patterns';
 
 
 export const runtime = 'nodejs';
@@ -39,17 +40,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const { project_name, claude_md } = body;
   if (!project_name) return NextResponse.json({ error: 'Missing project_name' }, { status: 400 });
 
-  // Simple hash to avoid reprocessing
+  // Simple hash to avoid reprocessing unchanged CLAUDE.md
   const hash = claude_md
     ? Buffer.from(claude_md).toString('base64').slice(0, 32)
     : null;
+
+  // Extract patterns from CLAUDE.md content
+  const patterns = claude_md ? extractPatterns(claude_md) : {};
 
   const { error } = await supabase.from('user_projects').upsert({
     user_id: user.id,
     project_name,
     claude_md: claude_md ?? null,
     claude_md_hash: hash,
-    patterns: {},  // Will be populated by background job
+    patterns,
   }, { onConflict: 'user_id,project_name' });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
