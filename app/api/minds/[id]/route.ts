@@ -7,6 +7,10 @@ import { mergeMinds, readSharedMinds, readUserMinds, type MindMetadata } from '~
 
 // Resolve o username do teamAI a partir do Supabase user_id
 function resolveUsername(userId: string): string | null {
+  // Dev mode: use TEAMAI_DEV_USERNAME environment variable
+  if (!Boolean(process.env['NEXT_PUBLIC_SUPABASE_URL'])) {
+    return process.env['TEAMAI_DEV_USERNAME'] ?? null;
+  }
   // TODO(Story 3.1): buscar do Supabase com JOIN users.profiles
   const STATIC_MAP: Record<string, string> = {};
   return STATIC_MAP[userId] ?? null;

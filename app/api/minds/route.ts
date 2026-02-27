@@ -7,11 +7,12 @@ import { mergeMinds, mindToSimplePersona, readSharedMinds, readUserMinds, type M
 // Resolve o username do teamAI a partir do Supabase user_id
 // Por enquanto usa mapeamento estático — Story 3.1 integrará JWT completo
 function resolveUsername(userId: string): string | null {
+  // Dev mode: use TEAMAI_DEV_USERNAME environment variable
+  if (!Boolean(process.env['NEXT_PUBLIC_SUPABASE_URL'])) {
+    return process.env['TEAMAI_DEV_USERNAME'] ?? null;
+  }
   // TODO(Story 3.1): buscar do Supabase com JOIN users.profiles
-  // Mapeamento temporário para desenvolvimento local
-  const STATIC_MAP: Record<string, string> = {
-    // Adicionar aqui durante desenvolvimento: 'supabase-uuid': 'username_no_repo'
-  };
+  const STATIC_MAP: Record<string, string> = {};
   return STATIC_MAP[userId] ?? null;
 }
 
