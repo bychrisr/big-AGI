@@ -4,8 +4,8 @@ import { AixChatGenerateContent_DMessageGuts, aixChatGenerateContent_DMessage_Fr
 
 import type { DLLMId } from '~/common/stores/llms/llms.types';
 import { agiUuid } from '~/common/util/idUtils';
-import { createDMessageEmpty, DMessage, duplicateDMessage, messageWasInterruptedAtStart } from '~/common/stores/chat/chat.message';
-import { createPlaceholderVoidFragment, DMessageFragment, DMessageFragmentId } from '~/common/stores/chat/chat.fragments';
+import { createDMessageEmpty, DMessage, duplicateDMessage, messageFragmentsReduceText, messageWasInterruptedAtStart } from '~/common/stores/chat/chat.message';
+import { createPlaceholderVoidFragment, createTextContentFragment, DMessageFragment, DMessageFragmentId } from '~/common/stores/chat/chat.fragments';
 import { findLLMOrThrow } from '~/common/stores/llms/store-llms';
 import { getUXLabsHighPerformance } from '~/common/stores/store-ux-labs';
 import { splitSystemMessageFromHistory } from '~/common/stores/chat/chat.conversation';
@@ -40,13 +40,102 @@ export function createBRayEmpty(llmId: DLLMId | null): BRay {
   };
 }
 
-function rayScatterStart(ray: BRay, llmId: DLLMId | null, inputHistory: DMessage[], onlyIdle: boolean, playNice: boolean, scatterStore: ScatterStoreSlice): BRay {
+interface DebateStreamChunk {
+  type: 'text' | 'token_usage' | 'error' | 'done';
+  mind_slug: string;
+  content?: string;
+  error?: string;
+}
+
+
+async function debateChatGenerateContent(
+  mindId: string,
+  topic: string,
+  userMessage: string,
+  sessionId: string,
+  projectName: string | undefined,
+  onChunk: (text: string) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  const response = await fetch('/api/debate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ minds: [mindId], topic, user_message: userMessage, session_id: sessionId, project_name: projectName }),
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Debate API error: HTTP ${response.status}`);
+  }
+
+  if (!response.body) return;
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    // keep the last potentially incomplete line in the buffer
+    buffer = lines.pop() ?? '';
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const chunk = JSON.parse(line) as DebateStreamChunk;
+        if (chunk.type === 'text' && chunk.content) {
+          onChunk(chunk.content);
+        } else if (chunk.type === 'error' && chunk.error) {
+          throw new Error(chunk.error);
+        }
+      } catch (parseErr) {
+        // skip malformed lines — only rethrow real errors
+        if (parseErr instanceof SyntaxError) continue;
+        throw parseErr;
+      }
+    }
+  }
+
+  // process any remaining buffered data
+  if (buffer.trim()) {
+    try {
+      const chunk = JSON.parse(buffer) as DebateStreamChunk;
+      if (chunk.type === 'text' && chunk.content) {
+        onChunk(chunk.content);
+      }
+    } catch {
+      // ignore incomplete final line
+    }
+  }
+}
+
+
+interface DebateContext {
+  mindId: string;
+  topic: string;
+  userMessage: string;
+  sessionId: string;
+  projectName?: string;
+}
+
+
+function rayScatterStart(
+  ray: BRay,
+  llmId: DLLMId | null,
+  inputHistory: DMessage[],
+  onlyIdle: boolean,
+  playNice: boolean,
+  scatterStore: ScatterStoreSlice,
+  debateContext?: DebateContext,
+): BRay {
   if (ray.genAbortController)
     return ray;
   if (onlyIdle && ray.status !== 'empty')
     return ray;
-  if (!llmId)
-    return { ...ray, scatterIssue: 'No model selected' };
 
   const { rays, _rayUpdate, _syncRaysStateToScatter } = scatterStore;
 
@@ -54,17 +143,81 @@ function rayScatterStart(ray: BRay, llmId: DLLMId | null, inputHistory: DMessage
   if (!inputHistory || inputHistory.length < 1 || inputHistory[inputHistory.length - 1].role !== 'user')
     return { ...ray, scatterIssue: `Invalid conversation history (${inputHistory?.length})` };
 
+  const abortController = new AbortController();
+
+  if (debateContext) {
+    // debate mode: stream from /api/debate for this specific mind
+    let accumulatedText = '';
+
+    debateChatGenerateContent(
+      debateContext.mindId,
+      debateContext.topic,
+      debateContext.userMessage,
+      debateContext.sessionId,
+      debateContext.projectName,
+      (text: string) => {
+        accumulatedText += text;
+        _rayUpdate(ray.rayId, (r) => ({
+          message: {
+            ...r.message,
+            fragments: [createTextContentFragment(accumulatedText)],
+            updated: Date.now(),
+          },
+        }));
+      },
+      abortController.signal,
+    )
+      .then(() => {
+        _rayUpdate(ray.rayId, {
+          status: 'success',
+          genAbortController: undefined,
+        });
+      })
+      .catch((err: unknown) => {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        const isAbort = errMsg.includes('abort') || errMsg.includes('Abort');
+        _rayUpdate(ray.rayId, {
+          status: isAbort ? 'stopped' : 'error',
+          scatterIssue: isAbort ? undefined : errMsg,
+          genAbortController: undefined,
+        });
+      })
+      .finally(() => {
+        _syncRaysStateToScatter();
+      });
+
+    const newMessage: DMessage = {
+      ...ray.message,
+      fragments: [createPlaceholderVoidFragment(SCATTER_PLACEHOLDER)],
+      pendingIncomplete: true,
+      created: Date.now(),
+      updated: null,
+    };
+
+    return {
+      rayId: ray.rayId,
+      status: 'scattering',
+      message: newMessage,
+      rayLlmId: null,
+      scatterIssue: undefined,
+      genAbortController: abortController,
+      userSelected: false,
+      imported: false,
+    };
+  }
+
+  // standard LLM mode
+  if (!llmId)
+    return { ...ray, scatterIssue: 'No model selected' };
+
   // split pre dynamic-personas
   const { chatSystemInstruction: scatterSystemInstruction, chatHistory: scatterInputHistory } = splitSystemMessageFromHistory(inputHistory);
 
-
-  const abortController = new AbortController();
-
   const onMessageUpdated = (incrementalMessage: AixChatGenerateContent_DMessageGuts, completed: boolean) => {
     const { fragments: incrementalFragments, ...incrementalRest } = incrementalMessage;
-    _rayUpdate(ray.rayId, (ray) => ({
+    _rayUpdate(ray.rayId, (r) => ({
       message: {
-        ...ray.message,
+        ...r.message,
         ...(incrementalFragments?.length ? { fragments: [...incrementalFragments] } : {}),
         ...incrementalRest,
         ...(completed ? { pendingIncomplete: undefined } : {}), // clear the pending flag once the message is complete
@@ -310,14 +463,33 @@ export const createScatterSlice: StateCreator<RootStoreSlice & ScatterStoreSlice
 
 
   startScatteringAll: (restart: boolean) => {
-    const { inputHistory } = _get();
+    const { inputHistory, debateMode, debateMinds } = _get();
+    const history = inputHistory || [];
+    const sessionId = agiUuid('beam-debate-session');
+
+    // extract the last user message for debate mode
+    const lastUserMessage = history.length > 0
+      ? messageFragmentsReduceText(history[history.length - 1]!.fragments)
+      : '';
+
     _set(state => ({
       // Start all rays
-      rays: state.rays.map(ray =>
-        (!restart || ray.status !== 'empty')
-          ? rayScatterStart(ray, ray.rayLlmId, inputHistory || [], false, true, _get())
-          : ray
-      ),
+      rays: state.rays.map((ray, index) => {
+        if (restart && ray.status === 'empty') return ray;
+
+        if (debateMode && debateMinds.length > 0) {
+          const mind = debateMinds[index % debateMinds.length];
+          if (!mind) return { ...ray, scatterIssue: `No mind at index ${index}` };
+          return rayScatterStart(ray, null, history, false, true, _get(), {
+            mindId: mind.id,
+            topic: lastUserMessage,
+            userMessage: lastUserMessage,
+            sessionId,
+          });
+        }
+
+        return rayScatterStart(ray, ray.rayLlmId, history, false, true, _get());
+      }),
     }));
     _get()._syncRaysStateToScatter();
   },
@@ -330,12 +502,30 @@ export const createScatterSlice: StateCreator<RootStoreSlice & ScatterStoreSlice
     })),
 
   rayToggleScattering: (rayId: BRayId) => {
-    const { inputHistory, _rayUpdate, _syncRaysStateToScatter } = _get();
-    _rayUpdate(rayId, (ray) =>
-      ray.status === 'scattering'
-        ? /* User Terminated the ray */ rayScatterStop(ray)
-        : /* User Started the ray */ rayScatterStart(ray, ray.rayLlmId, inputHistory || [], false, false, _get()),
-    );
+    const { inputHistory, debateMode, debateMinds, rays, _rayUpdate, _syncRaysStateToScatter } = _get();
+    const history = inputHistory || [];
+    const sessionId = agiUuid('beam-debate-session');
+    const lastUserMessage = history.length > 0
+      ? messageFragmentsReduceText(history[history.length - 1]!.fragments)
+      : '';
+
+    _rayUpdate(rayId, (ray) => {
+      if (ray.status === 'scattering') return rayScatterStop(ray);
+
+      if (debateMode && debateMinds.length > 0) {
+        const rayIndex = rays.findIndex(r => r.rayId === rayId);
+        const mind = debateMinds[rayIndex % debateMinds.length];
+        if (!mind) return { ...ray, scatterIssue: `No mind at index ${rayIndex}` };
+        return rayScatterStart(ray, null, history, false, false, _get(), {
+          mindId: mind.id,
+          topic: lastUserMessage,
+          userMessage: lastUserMessage,
+          sessionId,
+        });
+      }
+
+      return rayScatterStart(ray, ray.rayLlmId, history, false, false, _get());
+    });
     _syncRaysStateToScatter();
   },
 

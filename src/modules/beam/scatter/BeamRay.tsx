@@ -33,6 +33,7 @@ import { TooltipOutlined } from '~/common/components/TooltipOutlined';
 import { rayIsError, rayIsImported, rayIsScattering, rayIsSelectable, rayIsUserSelected } from './beam.scatter';
 import { useBeamCardScrolling, useBeamScatterShowLettering } from '../store-module-beam';
 import { useMessageAvatarLabel } from '~/common/util/dMessageUtils';
+import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 
 
 /*const letterSx: SxProps = {
@@ -160,6 +161,8 @@ export function BeamRay(props: {
 
   // external state
   const ray = useBeamStore(props.beamStore, store => store.rays.find(ray => ray.rayId === props.rayId) ?? null);
+  const debateMode = useBeamStore(props.beamStore, store => store.debateMode);
+  const debateMinds = useBeamStore(props.beamStore, store => store.debateMinds);
   const cardScrolling = useBeamCardScrolling();
   const showLettering = useBeamScatterShowLettering();
 
@@ -188,6 +191,15 @@ export function BeamRay(props: {
 
   // more derived
   const llmShowReasoning = !BEAM_SHOW_REASONING_ICON ? false : llmOrNull?.interfaces?.includes(LLM_IF_OAI_Reasoning) ?? false;
+
+  // debate mode: mind info for this ray
+  const debateMind = debateMode ? (debateMinds[props.rayIndexWeak] ?? null) : null;
+  const debateLlmComponent = debateMind ? (
+    <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+      <Typography level='title-sm' noWrap>{debateMind.name}</Typography>
+      <Typography level='body-xs' sx={{ color: 'text.secondary' }} noWrap>{debateMind.specialty}</Typography>
+    </Box>
+  ) : null;
 
 
   // handlers
@@ -257,14 +269,14 @@ export function BeamRay(props: {
         isMobile={props.isMobile}
         isRemovable={props.isRemovable}
         isScattering={isScattering}
-        llmComponent={llmComponent}
-        llmShowReasoning={llmShowReasoning}
-        llmVendorId={llmOrNull?.vId}
+        llmComponent={debateLlmComponent ?? llmComponent}
+        llmShowReasoning={debateMode ? false : llmShowReasoning}
+        llmVendorId={debateMode ? undefined : llmOrNull?.vId}
         onIconClick={handleDebugPrint}
         onRemove={handleRayRemove}
         onToggleGenerate={handleRayToggleGenerate}
-        rayLetter={showLettering ? 'R' + (1 + props.rayIndexWeak) : undefined}
-        rayAvatarTooltip={rayAvatarTooltip}
+        rayLetter={debateMode ? undefined : (showLettering ? 'R' + (1 + props.rayIndexWeak) : undefined)}
+        rayAvatarTooltip={debateMind ? debateMind.specialty : rayAvatarTooltip}
         // isLlmLinked={isLlmLinked}
         // onLink={handleLlmLink}
       />

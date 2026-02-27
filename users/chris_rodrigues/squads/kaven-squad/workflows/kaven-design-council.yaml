@@ -1,0 +1,231 @@
+workflow:
+  id: kaven-design-council
+  name: kaven-design-council
+  description: 'Cross-squad workflow that orchestrates design consultations between kaven-squad agents and mmos-squad design
+    minds (Brad Frost, Don Norman, Julie Zhuo, Michael Bierut). Used for major design decisions that affect architecture,
+    UX, brand identity, or design system structure across the Kaven platform.
+
+    '
+  type: cross-squad
+  version: 1.0.0
+  trigger:
+    manual: true
+    command: '@kaven *design-council'
+    aliases:
+    - '@kaven *dc'
+    - '@kaven *design-review'
+  input:
+    required:
+    - design_question: string
+    - scope: string
+    optional:
+    - context_files: list
+    - requesting_agent: string
+    - framework: string
+    - urgency: string
+  output:
+  - design_decision: string
+  - council_transcript: string
+  - action_items: list
+  - evidence_bundle:
+    - council_transcript.md
+    - action_items.md
+    - dissenting_views.md
+  execution_modes:
+    yolo:
+      prompts: 0
+      description: Full autonomous execution — loads minds, runs debate, synthesizes, returns recommendations
+    interactive:
+      prompts: 3
+      description: Confirms mind selection, presents perspectives, asks for approval before finalizing
+    preflight:
+      prompts: 5
+      description: Reviews question framing, confirms scope, validates minds, presents plan before execution
+  success_criteria:
+  - Design question receives perspectives from at least 2 design minds
+  - Recommendation includes concrete action items with assignees
+  - Architectural feasibility is validated
+  - Evidence bundle is generated
+  failure_handling:
+    mind_load_failure:
+      action: Proceed with available minds. Minimum 1 mind required.
+    debate_timeout:
+      action: Skip cross-pollination, use individual perspectives for synthesis.
+    architect_unavailable:
+      action: Skip feasibility review, note as pending in evidence bundle.
+  tags:
+  - cross-squad
+  - design
+  - consultation
+  - mmos-integration
+  - design-council
+  sequence:
+  - id: frame_question
+    name: Frame the Design Question
+    agent: kaven-architect
+    description: 'The Architect (Atlas) frames the design question with technical context. Identifies which architectural
+      constraints are relevant, what patterns are already in use, and what the decision''s blast radius is.
+
+      '
+    input:
+    - design_question
+    - scope
+    - context_files
+    output:
+    - framed_question: string
+    - constraints: list
+    - affected_areas: list
+    on_failure: skip_to_load_minds
+  - id: load_minds
+    name: Load Design Mind System Prompts
+    agent: kaven-frontend-dev
+    description: 'Pixel loads the design mind system prompts from mmos-squad based on the scope of the question. Different
+      scopes prioritize different minds.
+
+      '
+    depends_on:
+    - frame_question
+    input:
+    - scope
+    - urgency
+    mind_selection:
+      component:
+        primary:
+        - brad_frost
+        - don_norman
+        optional:
+        - julie_zhuo
+      page:
+        primary:
+        - don_norman
+        - brad_frost
+        optional:
+        - julie_zhuo
+        - michael_bierut
+      system:
+        primary:
+        - brad_frost
+        - don_norman
+        - julie_zhuo
+        optional:
+        - michael_bierut
+      brand:
+        primary:
+        - michael_bierut
+        - brad_frost
+        optional:
+        - don_norman
+        - julie_zhuo
+    mind_paths:
+      brad_frost: squads/mmos-squad/minds/brad_frost/system_prompts/system-prompt-design-systems-v2.0.md
+      don_norman: squads/mmos-squad/minds/don_norman/system_prompts/system-prompt-ux-expert-v1.0.md
+      julie_zhuo: squads/mmos-squad/minds/julie_zhuo/system_prompts/system-prompt-design-leader-v1.0.md
+      michael_bierut: squads/mmos-squad/minds/michael_bierut/system_prompts/system-prompt-brand-strategist-v1.0.md
+    output:
+    - loaded_minds: list
+    - token_budget: number
+  - id: individual_perspectives
+    name: Gather Individual Perspectives
+    agent: kaven-frontend-dev
+    description: 'Pixel channels each loaded design mind sequentially, presenting the framed question and capturing their
+      unique perspective using their cognitive frameworks.
+
+      '
+    depends_on:
+    - load_minds
+    input:
+    - framed_question
+    - constraints
+    - loaded_minds
+    output:
+    - perspectives: map
+    execution_rules:
+    - Each mind responds using their specific frameworks and vocabulary
+    - Brad Frost applies Atomic Design, Scale Testing, Interface Inventory
+    - Don Norman applies Seven Principles, Affordances, Gulf analysis
+    - Julie Zhuo applies Purpose-People-Process, Controversial Principles Test
+    - Michael Bierut applies Design as Storytelling, Systems Over Marks
+  - id: cross_pollination
+    name: Cross-Pollination Debate
+    agent: kaven-frontend-dev
+    description: 'Minds respond to each other''s perspectives. Each mind identifies the strongest point from another mind
+      and builds on it or challenges it. Uses the specified debate framework to structure the exchange.
+
+      '
+    depends_on:
+    - individual_perspectives
+    skip_if: urgency == "quick"
+    input:
+    - perspectives
+    - framework
+    output:
+    - debate_transcript: string
+    - consensus_points: list
+    - dissenting_views: list
+    frameworks:
+      steel_man:
+        rounds: 2
+        rules: Each mind must articulate the BEST version of a competing perspective before defending their own
+      socratic:
+        rounds: 3
+        rules: Minds ask probing questions of each other, drilling into assumptions
+      hegelian:
+        rounds: 2
+        rules: Thesis -> Antithesis -> Synthesis progression toward resolution
+  - id: synthesize
+    name: Synthesize Recommendations
+    agent: kaven-frontend-dev
+    description: 'Pixel synthesizes all perspectives and debate into a consolidated recommendation. Identifies consensus,
+      notes dissenting views, and translates into actionable steps.
+
+      '
+    depends_on:
+    - cross_pollination
+    input:
+    - perspectives
+    - debate_transcript
+    - consensus_points
+    - dissenting_views
+    - constraints
+    output:
+    - recommendation: string
+    - action_items: list
+    - trade_offs: list
+  - id: architect_review
+    name: Architectural Feasibility Review
+    agent: kaven-architect
+    description: 'Atlas reviews the design recommendation for architectural feasibility. Validates that the proposed approach
+      works with Kaven''s technical constraints (multi-tenancy, Server Components, performance budgets, etc.).
+
+      '
+    depends_on:
+    - synthesize
+    input:
+    - recommendation
+    - action_items
+    - affected_areas
+    output:
+    - feasibility_verdict: string
+    - technical_notes: list
+    - revised_action_items: list
+    on_failure: use_original_recommendation
+  - id: generate_evidence
+    name: Generate Evidence Bundle
+    agent: kaven-frontend-dev
+    description: 'Compile the complete consultation into an evidence bundle for traceability.
+
+      '
+    depends_on:
+    - architect_review
+    output:
+    - evidence_bundle:
+        council_transcript: 'Full transcript with framed question, individual perspectives, cross-pollination debate, synthesis,
+          and architectural review.
+
+          '
+        action_items: 'Final action items with assignee (which kaven-squad agent executes each).
+
+          '
+        dissenting_views: 'Documented disagreements with reasoning for the chosen path.
+
+          '

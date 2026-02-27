@@ -6,6 +6,11 @@ import { ConversationHandler } from '~/common/chat-overlay/ConversationHandler';
 import { ConversationsManager } from '~/common/chat-overlay/ConversationsManager';
 import { createTextContentFragment, isContentOrAttachmentFragment, isImageRefPart, isTextContentFragment, isZyncAssetImageReferencePart } from '~/common/stores/chat/chat.fragments';
 import { getConversationSystemPurposeId } from '~/common/stores/chat/store-chats';
+import { useFolderStore } from '~/common/stores/folders/store-chat-folders';
+
+import { SystemPurposes } from '../../../data';
+import { registeredMindIds } from '~/modules/teamai/store-minds';
+import { ensureFreshMindSystemMessage } from '~/modules/teamai/store-memory-context';
 
 import type { ChatExecuteMode } from '../execute-mode/execute-mode.types';
 import { textToDrawCommand } from '../commands/CommandsDraw';
@@ -25,6 +30,19 @@ export async function _handleExecute(chatExecuteMode: ChatExecuteMode, conversat
   const chatLLMId = getChatLLMId();
   const cHandler = ConversationsManager.getHandler(conversationId);
   const initialHistory = cHandler.historyViewHeadOrThrow('handle-execute-' + executeCallerNameDebug) as Readonly<DMessage[]>;
+
+  // [teamAI] Refresh MMOS mind system prompt (full prompt + memory layer) before every AIX call.
+  // This is the Story 4.3 "inject at AIX level" pattern: memories are always fresh,
+  // not just at mind-selection time. Cache TTL of 2 min avoids redundant API calls.
+  const _activePurposeId = getConversationSystemPurposeId(conversationId);
+  if (_activePurposeId && registeredMindIds.has(_activePurposeId)) {
+    const { folders } = useFolderStore.getState();
+    const activeFolder = folders.find(f => f.conversationIds.includes(conversationId));
+    const freshSystemMsg = await ensureFreshMindSystemMessage(_activePurposeId, activeFolder?.title);
+    if (freshSystemMsg && SystemPurposes[_activePurposeId]) {
+      SystemPurposes[_activePurposeId]!.systemMessage = freshSystemMsg;
+    }
+  }
 
   // Update the system message from the active persona to the history
   // NOTE: this does NOT call setMessages anymore (optimization). make sure to:

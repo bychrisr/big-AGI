@@ -7,16 +7,65 @@
  * need to use are documented accordingly near the end.
  */
 import type { FetchCreateContextFnOptions } from '@trpc/server/adapters/fetch';
-import * as z from 'zod/v4';
+import { createServerClient } from '@supabase/ssr';
+import { TRPCError } from '@trpc/server';
 import { initTRPC } from '@trpc/server';
+import * as z from 'zod/v4';
+
 import { transformer } from './trpc.transformer';
 import { TRPCFetcherError } from './trpc.router.fetchers';
+
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const SUPABASE_ENABLED = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+
+
+export type TRPCUser = {
+  id: string;
+  email: string | undefined;
+};
 
 
 /**
  * Type of the Context object passed to procedures/resolvers, to avoid circular dependencies.
  */
 export type ChatGenerateContentContext = Awaited<ReturnType<typeof createTRPCFetchContext>>;
+
+
+/**
+ * Extracts the authenticated Supabase user from a fetch Request.
+ * Uses cookie-based auth via @supabase/ssr, compatible with Edge runtime.
+ */
+async function getUserFromRequest(
+  req: Request,
+): Promise<TRPCUser | null> {
+  if (!SUPABASE_ENABLED) return null;
+
+  const supabase = createServerClient(
+    SUPABASE_URL!,
+    SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          const cookieHeader = req.headers.get('cookie') ?? '';
+          return cookieHeader.split(';').map(c => {
+            const [name, ...rest] = c.trim().split('=');
+            return { name: name ?? '', value: rest.join('=') };
+          }).filter(c => c.name);
+        },
+        setAll() {
+          // tRPC context is read-only; cookie writes
+          // are handled by the Next.js middleware
+        },
+      },
+    },
+  );
+
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) return null;
+  return { id: user.id, email: user.email };
+}
 
 
 /**
@@ -27,9 +76,9 @@ export type ChatGenerateContentContext = Awaited<ReturnType<typeof createTRPCFet
  * These allow you to access things when processing a request, like the database, the session, etc.
  */
 export const createTRPCFetchContext = async ({ req }: FetchCreateContextFnOptions) => {
-  // const user = { name: req.headers.get('username') ?? 'anonymous' };
-  // return { req, resHeaders };
+  const user = await getUserFromRequest(req);
   return {
+    user,
     // only used by Backend Analytics
     hostName: req.headers?.get('host') ?? 'localhost',
     // enables cancelling upstream requests when the downstream request is aborted
@@ -108,8 +157,15 @@ export const publicProcedure = t.procedure;
  */
 export const edgeProcedure = t.procedure;
 
-// /**
-//  * Create a server-side caller
-//  * @link https://trpc.io/docs/v11/server/server-side-calls
-//  */
-// export const createCallerFactory = t.createCallerFactory;
+/**
+ * Protected procedure — requires an authenticated Supabase user.
+ * Throws UNAUTHORIZED if ctx.user is null (no valid session).
+ * Use for teamAI-specific routers that need user identity.
+ */
+const enforceAuth = t.middleware(({ ctx, next }) => {
+  if (!ctx.user)
+    throw new TRPCError({ code: 'UNAUTHORIZED' });
+  return next({ ctx: { ...ctx, user: ctx.user } });
+});
+
+export const protectedProcedure = t.procedure.use(enforceAuth);

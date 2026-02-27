@@ -10,6 +10,7 @@ import { BeamConfigSnapshot, useModuleBeamStore } from './store-module-beam';
 import { SCATTER_RAY_DEF } from './beam.config';
 import { createGatherSlice, GatherStoreSlice, reInitGatherStateSlice } from './gather/beam.gather';
 import { createScatterSlice, reInitScatterStateSlice, ScatterStoreSlice } from './scatter/beam.scatter';
+import type { DebateMind } from './debate/DebateMindSelector';
 
 
 /// Beam Store (vanilla, creator function) ///
@@ -40,6 +41,10 @@ interface RootStateSlice {
   inputReady: boolean;
   onSuccessCallback: BeamSuccessCallback | null;
 
+  // debate mode
+  debateMode: boolean;
+  debateMinds: DebateMind[];
+
 }
 
 const initRootStateSlice = (): RootStateSlice => ({
@@ -52,12 +57,17 @@ const initRootStateSlice = (): RootStateSlice => ({
   inputReady: false,
   onSuccessCallback: null,
 
+  // debate mode
+  debateMode: false,
+  debateMinds: [],
+
 });
 
 export interface RootStoreSlice extends RootStateSlice {
 
   // lifecycle
   open: (chatHistory: Readonly<DMessage[]>, initialChatLlmId: DLLMId | null, isEditMode: boolean, callback: BeamSuccessCallback) => void;
+  openDebate: (chatHistory: Readonly<DMessage[]>, minds: DebateMind[], callback: BeamSuccessCallback) => void;
   terminateKeepingSettings: () => void;
   loadBeamConfig: (preset: BeamConfigSnapshot | null) => void;
 
@@ -117,6 +127,32 @@ const createRootSlice: StateCreator<BeamStore, [], [], RootStoreSlice> = (_set, 
       setRayLlmIds(autoLlmIds);
       setCurrentGatherLlmId(autoLlmIds[0]);
     }
+  },
+
+  openDebate: (chatHistory: Readonly<DMessage[]>, minds: DebateMind[], callback: BeamSuccessCallback) => {
+    const { terminateKeepingSettings, setRayCount } = _get();
+
+    // reset pending operations
+    terminateKeepingSettings();
+
+    // validate history
+    const history = [...chatHistory];
+    const isValidHistory = history.length >= 1 && history[history.length - 1].role === 'user';
+
+    // set debate state and open beam
+    _set({
+      isOpen: true,
+      isEditMode: false,
+      inputHistory: isValidHistory ? history : null,
+      inputIssues: isValidHistory ? null : 'Invalid conversation history: missing user message',
+      inputReady: isValidHistory,
+      onSuccessCallback: callback,
+      debateMode: true,
+      debateMinds: minds,
+    });
+
+    // create one ray per mind (rayLlmId is null — debate uses mind, not LLM directly)
+    setRayCount(minds.length);
   },
 
   terminateKeepingSettings: () =>

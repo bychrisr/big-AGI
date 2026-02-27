@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 // This is here to index all the UUIDs in the application
 type UidScope =
   | 'attachment-draft'
+  | 'beam-debate-session'
   | 'beam-fusion'
   | 'beam-preset-config'
   | 'beam-ray'

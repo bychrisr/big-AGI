@@ -60,10 +60,12 @@ export function CreatorDrawerItem(props: {
           {item.name || (item.systemPrompt?.slice(0, 40) + '...')}
         </Typography>
 
-        {/* creation Model */}
-        {/*{!!item.llmLabel && <Typography level='body-xs' sx={{ overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>*/}
-        {/*  {item.llmLabel}*/}
-        {/*</Typography>}*/}
+        {/* Specialty/description for synced MMOS minds */}
+        {!!item.description && (
+          <Typography level='body-xs' sx={{ overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', color: 'text.secondary' }}>
+            {item.description}
+          </Typography>
+        )}
 
         {/* creation Date */}
         <Typography level='body-xs'>

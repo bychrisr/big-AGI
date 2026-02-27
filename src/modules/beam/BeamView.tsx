@@ -18,6 +18,7 @@ import { BeamScatterInput } from './scatter/BeamScatterInput';
 import { BeamScatterPane } from './scatter/BeamScatterPane';
 import { BeamStoreApi, useBeamStore } from './store-beam.hooks';
 import { useModuleBeamStore } from './store-module-beam';
+import type { DebateMind } from './debate/DebateMindSelector';
 
 
 export function BeamView(props: {
@@ -40,6 +41,7 @@ export function BeamView(props: {
   const {
     /* root */ inputHistoryReplaceMessageFragment,
     /* scatter */ setRayCount, startScatteringAll, stopScatteringAll,
+    /* debate */ openDebate,
   } = props.beamStore.getState();
   const {
     /* root */ inputHistory, inputIssues, inputReady,
@@ -91,6 +93,14 @@ export function BeamView(props: {
     setHasAutoMerged(false);
     startScatteringAll(restart);
   }, [startScatteringAll]);
+
+  const handleDebateStart = React.useCallback((minds: DebateMind[]) => {
+    const { inputHistory, onSuccessCallback } = props.beamStore.getState();
+    if (!inputHistory || !onSuccessCallback) return;
+    setHasAutoMerged(false);
+    openDebate(inputHistory, minds, onSuccessCallback);
+    startScatteringAll(false);
+  }, [openDebate, props.beamStore, startScatteringAll]);
 
 
   const handleCreateFusion = React.useCallback(() => {
@@ -195,6 +205,7 @@ export function BeamView(props: {
         onStart={handleScatterStart}
         onStop={stopScatteringAll}
         onExplainerShow={explainerShow}
+        onDebateStart={handleDebateStart}
       />
 
 

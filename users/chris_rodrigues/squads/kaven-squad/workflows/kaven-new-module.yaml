@@ -1,0 +1,204 @@
+workflow:
+  id: kaven-new-module
+  name: Create Kaven CLI Module
+  description: |
+    Complete workflow for creating a kaven-cli installable module.
+    A module is a self-contained feature package that can be added/removed
+    via `kaven module add/remove` with marker-based idempotency.
+  version: "1.0.0"
+  tags: [module, cli, package]
+
+  inputs:
+    - name: module_name
+      type: string
+      required: true
+      description: Module identifier (lowercase, kebab-case)
+    - name: module_description
+      type: string
+      required: true
+      description: Human-readable module description
+    - name: has_schema
+      type: boolean
+      default: true
+      description: Whether module adds Prisma models
+    - name: has_frontend
+      type: boolean
+      default: true
+      description: Whether module includes frontend pages
+    - name: target_apps
+      type: array
+      items: [admin, tenant]
+      default: [tenant]
+      description: Which frontend apps include this module
+
+  sequence:
+    - id: design-module
+      name: Module Architecture Design
+      agent: kaven-architect
+      description: |
+        Design the module structure following Kaven patterns:
+        - Define models, endpoints, pages
+        - Plan marker injection points
+        - Identify anchor targets
+        - List dependencies and env vars
+      actions:
+        - review_existing_modules: true
+        - design_module_structure: "{{module_name}}"
+        - define_injections: true
+        - define_dependencies: true
+      outputs:
+        - module_design
+        - injection_points
+        - dependency_list
+
+    - id: create-module-json
+      name: Create module.json
+      agent: kaven-api-dev
+      depends_on: [design-module]
+      description: |
+        Create the module manifest file with:
+        - files list (all module files)
+        - injections (target file, anchor, content)
+        - dependencies (npm packages)
+        - scripts (migration, seed)
+        - env vars (with empty defaults)
+      actions:
+        - create_file: "src/modules/{{module_name}}/module.json"
+      outputs:
+        - module_json
+
+    - id: schema-models
+      name: Add Schema Models
+      agent: kaven-db-engineer
+      depends_on: [create-module-json]
+      condition: "{{has_schema}}"
+      description: |
+        Add Prisma models to schema.extended.prisma:
+        - Use markers: // [KAVEN_MODULE:{{module_name}} BEGIN/END]
+        - Include tenantId on all models
+        - Add composite indexes
+        - Add soft delete where appropriate
+        - Create migration file
+      actions:
+        - edit_file: packages/database/prisma/schema.extended.prisma
+        - create_migration: "add_{{module_name}}"
+        - run: pnpm db:generate
+      outputs:
+        - schema_changes
+        - migration_file
+
+    - id: backend-implementation
+      name: Backend Implementation
+      agent: kaven-api-dev
+      depends_on: [schema-models]
+      description: |
+        Create backend files in src/modules/{{module_name}}/:
+        - service.ts — Business logic
+        - controller.ts — Request handlers
+        - routes.ts — Fastify route definitions
+        - schemas.ts — Zod validation schemas
+        - types.ts — TypeScript interfaces
+        Follow existing patterns: RLS, soft delete, IDOR
+      actions:
+        - create_dir: "apps/api/src/modules/{{module_name}}"
+        - create_service: "{{module_name}}.service.ts"
+        - create_controller: "{{module_name}}.controller.ts"
+        - create_routes: "{{module_name}}.routes.ts"
+        - create_schemas: "{{module_name}}.schemas.ts"
+        - create_types: "{{module_name}}.types.ts"
+        - create_index: "index.ts"
+      outputs:
+        - backend_files
+
+    - id: frontend-implementation
+      name: Frontend Implementation
+      agent: kaven-frontend-dev
+      depends_on: [backend-implementation]
+      condition: "{{has_frontend}}"
+      description: |
+        Create frontend files for target apps:
+        - Pages in app/(dashboard)/{{module_name}}/
+        - Components in components/{{module_name}}/
+        - API client functions
+        - Navigation items (via anchor injection)
+        - i18n translations
+      actions:
+        - for_each: "{{target_apps}}"
+          do:
+            - create_page: "apps/{{app}}/app/(dashboard)/{{module_name}}/page.tsx"
+            - create_components: "apps/{{app}}/components/{{module_name}}/"
+            - add_nav_item: "apps/{{app}}/config/navigation.ts"
+            - add_translations: "apps/{{app}}/messages/"
+      outputs:
+        - frontend_files
+
+    - id: write-tests
+      name: Write Module Tests
+      agent: kaven-qa
+      depends_on: [backend-implementation, frontend-implementation]
+      description: |
+        Write tests for the module:
+        - Unit tests for service
+        - Integration tests for endpoints
+        - Multi-tenant isolation tests
+        - IDOR protection tests
+        - Module install/remove tests
+      actions:
+        - create_unit_tests: "apps/api/src/modules/{{module_name}}/__tests__/"
+        - create_isolation_tests: true
+        - create_module_tests: true
+        - run: pnpm test
+      outputs:
+        - test_files
+        - test_results
+
+    - id: package-module
+      name: Package Module
+      agent: kaven-devops
+      depends_on: [write-tests]
+      description: |
+        Finalize module.json with complete file list,
+        verify all injection points are valid,
+        test install and remove operations
+      actions:
+        - update_module_json: true
+        - verify_markers: true
+        - verify_anchors: true
+        - test_install: "kaven module add {{module_name}}"
+        - test_remove: "kaven module remove {{module_name}}"
+        - test_reinstall: "kaven module add {{module_name}}"
+      outputs:
+        - final_module_json
+
+    - id: validate-module
+      name: Validate Module Integrity
+      agent: kaven-qa
+      depends_on: [package-module]
+      description: |
+        Run module doctor and full quality pipeline:
+        - Module doctor checks marker integrity
+        - Full test suite passes
+        - Lint and typecheck pass
+        - Security tests pass
+      actions:
+        - run: "kaven module doctor {{module_name}}"
+        - run: pnpm lint
+        - run: pnpm typecheck
+        - run: pnpm test
+        - run: pnpm test:security
+      outputs:
+        - validation_report
+
+  completion:
+    evidence_bundle:
+      - module_json: true
+      - git_diff: true
+      - test_results: true
+      - doctor_report: true
+    commit_message: "feat(module): add {{module_name}} module"
+    deliverables:
+      - "src/modules/{{module_name}}/ — Module source files"
+      - "module.json — Module manifest"
+      - "Migration files"
+      - "Test files"
+      - "Documentation"

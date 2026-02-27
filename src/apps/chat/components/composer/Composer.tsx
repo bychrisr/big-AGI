@@ -57,6 +57,9 @@ import type { AttachmentDraftId } from '~/common/attachment-drafts/attachment.ty
 import { LLMAttachmentDraftsAction, LLMAttachmentsList } from './llmattachments/LLMAttachmentsList';
 import { PhPaintBrush } from '~/common/components/icons/phosphor/PhPaintBrush';
 import { useAttachmentDrafts } from '~/common/attachment-drafts/useAttachmentDrafts';
+import { detectAndSaveMemory } from '~/modules/teamai/detectAndSaveMemory';
+import { parseAgentCommand, isAgentPersona, COUNCILS } from '~/modules/teamai/agentCommands';
+import { useDebateTriggerStore } from '~/modules/teamai/store-debate-trigger';
 import { useLLMAttachmentDrafts } from './llmattachments/useLLMAttachmentDrafts';
 
 import type { ChatExecuteMode } from '../../execute-mode/execute-mode.types';
@@ -330,12 +333,15 @@ export function Composer(props: {
     // prepare the metadata
     const metadata = inReferenceTo?.length ? { inReferenceTo: inReferenceTo } : undefined;
 
+    // MMOS memory command detection: fire-and-forget before sending
+    void detectAndSaveMemory(composerText, systemPurposeId);
+
     // send the message - NOTE: if successful, the ownership of the fragments is transferred to the receiver, so we just clear them
     const enqueued = onAction(targetConversationId, _chatExecuteMode, fragments, metadata);
     if (enqueued)
       _handleClearText();
     return enqueued;
-  }, [targetConversationId, confirmProceedIfAttachmentsNotSupported, composerTextSuffix, props.capabilityHasT2IEdit, inReferenceTo, onAction, _handleClearText, attachmentsTakeAllFragments]);
+  }, [targetConversationId, confirmProceedIfAttachmentsNotSupported, composerTextSuffix, props.capabilityHasT2IEdit, inReferenceTo, onAction, _handleClearText, attachmentsTakeAllFragments, systemPurposeId]);
 
   const handleSendAction = React.useCallback(async (chatExecuteMode: ChatExecuteMode, composerText: string): Promise<boolean> => {
     setSendStarted(true);
@@ -453,8 +459,26 @@ export function Composer(props: {
       addSnackbar({ key: 'chat-mic-running', message: 'Please wait for the microphone to finish.', type: 'info' });
       return;
     }
+
+    // Agent command detection: *consult-growth/product or *think when agent persona active
+    const agentCmd = parseAgentCommand(composeText);
+    if (agentCmd && isAgentPersona(systemPurposeId)) {
+      const council = COUNCILS[agentCmd.council];
+      if (council) {
+        useDebateTriggerStore.getState().setPending({
+          council: agentCmd.council,
+          topic: agentCmd.topic,
+          mindIds: council.mindIds,
+        });
+        _handleClearText();
+        // Open beam to show DebateMindSelector with council pre-selected
+        await handleSendAction('beam-content', agentCmd.topic || `Reunião do ${council.name}`);
+        return;
+      }
+    }
+
     await handleSendAction(chatExecuteMode, composeText); // 'chat/write/...' button
-  }, [chatExecuteMode, composeText, handleFinishMicAndSend, handleSendAction, micIsRunning, recognitionState.isActive]);
+  }, [chatExecuteMode, composeText, handleFinishMicAndSend, handleSendAction, micIsRunning, recognitionState.isActive, systemPurposeId, _handleClearText]);
 
   const handleSendTextBeamClicked = React.useCallback(async () => {
     if (micIsRunning) {
@@ -876,7 +900,7 @@ export function Composer(props: {
                     variant='outlined'
                     color={isDraw ? 'warning' : isReAct ? 'success' : undefined}
                     autoFocus={isDesktop}
-                    minRows={isMobile ? 3.5 : isDraw ? 4 : agiAttachmentPrompts.hasData ? 3 : showChatInReferenceTo ? 4 : 5}
+                    minRows={1}
                     maxRows={isMobile ? 8 : 10}
                     placeholder={textPlaceholder}
                     value={composeText}

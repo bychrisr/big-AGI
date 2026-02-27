@@ -1,11 +1,20 @@
-# Very simple docker-compose file to run the app on http://localhost:3000 (or http://127.0.0.1:3000).
+# Docker Compose for teamAI self-hosted deployment.
 #
-# For more examples, such running big-AGI alongside a web browsing service, see the `docs/docker` folder.
+# For more examples, such as running alongside a web browsing service, see the `docs/docker` folder.
 
 services:
-  big-agi:
-    image: ghcr.io/enricoros/big-agi:latest
+  teamai:
+    build: .
     ports:
-      - "3000:3000"
+      - "${PORT:-3000}:3000"
     env_file:
       - .env
+    volumes:
+      - ${TEAMAI_REPO_PATH:-/home/bychrisr/projects/personal/mmos-squad}:/app/teamai-repo:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped

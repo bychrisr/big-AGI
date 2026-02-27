@@ -1,0 +1,248 @@
+workflow:
+  id: kaven-growth-council
+  name: kaven-growth-council
+  description: 'Cross-squad workflow that orchestrates growth consultations between kaven-squad agents and mmos-squad growth
+    minds (Seth Godin, Alex Hormozi, Eugene Schwartz, Paul Graham, Leandro Aguiari). Used for pricing strategy, positioning
+    decisions, copywriting direction, narrative-driven marketing, and go-to-market strategy questions that affect revenue,
+    customer acquisition, and market perception of the Kaven platform.
+
+    '
+  type: cross-squad
+  version: 1.0.0
+  trigger:
+    manual: true
+    command: '@kaven *growth-council'
+    aliases:
+    - '@kaven *gc'
+    - '@kaven *growth-review'
+  input:
+    required:
+    - growth_question: string
+    - scope: string
+    optional:
+    - context_files: list
+    - requesting_agent: string
+    - framework: string
+    - urgency: string
+  output:
+  - growth_decision: string
+  - council_transcript: string
+  - action_items: list
+  - evidence_bundle:
+    - council_transcript.md
+    - action_items.md
+    - dissenting_views.md
+  execution_modes:
+    yolo:
+      prompts: 0
+      description: Full autonomous execution — loads minds, runs debate, synthesizes, returns recommendations
+    interactive:
+      prompts: 3
+      description: Confirms mind selection, presents perspectives, asks for approval before finalizing
+    preflight:
+      prompts: 5
+      description: Reviews question framing, confirms scope, validates minds, presents plan before execution
+  success_criteria:
+  - Growth question receives perspectives from at least 2 growth minds
+  - Recommendation includes concrete action items with assignees
+  - Feasibility is reviewed for market/pricing/positioning alignment
+  - Evidence bundle is generated for traceability
+  failure_handling:
+    mind_load_failure:
+      action: Proceed with available minds. Minimum 1 mind required.
+    debate_timeout:
+      action: Skip cross-pollination, use individual perspectives for synthesis.
+    feasibility_unavailable:
+      action: Skip feasibility review, note as pending in evidence bundle.
+  tags:
+  - cross-squad
+  - growth-council
+  - consultation
+  - mmos-integration
+  - growth-marketing
+  sequence:
+  - id: frame_question
+    name: Frame the Growth Question
+    agent: kaven-squad-lead
+    description: 'Steave (Squad Lead) frames the growth question with market and business context. Identifies target customer
+      pain points, competitive landscape, pricing constraints, and what the decision''s impact is on revenue, acquisition,
+      and positioning.
+
+      '
+    input:
+    - growth_question
+    - scope
+    - context_files
+    output:
+    - framed_question: string
+    - constraints: list
+    - affected_areas: list
+    on_failure: skip_to_load_minds
+  - id: load_minds
+    name: Load Growth Mind System Prompts
+    agent: kaven-squad-lead
+    description: 'Steave loads the growth mind system prompts from mmos-squad based on the scope of the question. Different
+      scopes prioritize different minds based on their expertise (pricing, positioning, copywriting, go-to-market). WARNING:
+      Alex Hormozi''s prompt is ~60K tokens — prefer duo/single modes to avoid context overflow in Sonnet.
+
+      '
+    depends_on:
+    - frame_question
+    input:
+    - scope
+    - urgency
+    mind_selection:
+      pricing:
+        primary:
+        - alex_hormozi
+        - seth_godin
+        optional:
+        - paul_graham
+        - leandro_aguiari
+      positioning:
+        primary:
+        - seth_godin
+        - leandro_aguiari
+        optional:
+        - eugene_schwartz
+        - alex_hormozi
+      copy:
+        primary:
+        - eugene_schwartz
+        - leandro_aguiari
+        optional:
+        - alex_hormozi
+        - seth_godin
+      gtm:
+        primary:
+        - seth_godin
+        - leandro_aguiari
+        - alex_hormozi
+        optional:
+        - eugene_schwartz
+        - paul_graham
+      narrative:
+        primary:
+        - leandro_aguiari
+        - seth_godin
+        optional:
+        - eugene_schwartz
+    mind_paths:
+      seth_godin: squads/mmos-squad/minds/seth_godin/system_prompts/SYSTEM_PROMPT_SETH_GODIN_POSICIONAMENTO.md
+      alex_hormozi: squads/mmos-squad/minds/alex_hormozi/system_prompts/COGNITIVE_OS.md
+      eugene_schwartz: squads/mmos-squad/minds/eugene_schwartz/system_prompts/eugene-schwartz-v2.md
+      paul_graham: squads/mmos-squad/minds/paul_graham/system_prompts/paul_graham_ultimate_system_prompt.md
+      leandro_aguiari: squads/mmos-squad/minds/leandro_aguiari/system_prompts/SYSTEM_PROMPT_LEANDRO_AGUIARI_V1_GENERALISTA.md
+    output:
+    - loaded_minds: list
+    - token_budget: number
+    warnings:
+    - Alex Hormozi's COGNITIVE_OS.md is ~60K tokens. Consider duo/single mode with Sonnet to avoid context overflow.
+  - id: individual_perspectives
+    name: Gather Individual Perspectives
+    agent: kaven-squad-lead
+    description: 'Steave channels each loaded growth mind sequentially, presenting the framed question and capturing their
+      unique perspective using their cognitive frameworks.
+
+      '
+    depends_on:
+    - load_minds
+    input:
+    - framed_question
+    - constraints
+    - loaded_minds
+    output:
+    - perspectives: map
+    execution_rules:
+    - Each mind responds using their specific frameworks and vocabulary
+    - Seth Godin applies Purple Cow, Smallest Viable Audience, Permission Marketing, People Like Us
+    - Alex Hormozi applies Value Equation, Grand Slam Offer, Starving Crowd, Premium Positioning
+    - Eugene Schwartz applies Five Stages of Awareness, Market Sophistication, Assembly Method
+    - Paul Graham applies First Principles, Startup Wisdom, Contrarian Thinking, Empirical Evidence
+    - Leandro Aguiari applies Pilot Narrative Canvas, Storytelling Marketing, Personal Brand Architecture, Narrative-Driven Sales, Brazilian Market Expertise
+  - id: cross_pollination
+    name: Cross-Pollination Debate
+    agent: kaven-squad-lead
+    description: 'Minds respond to each other''s perspectives. Each mind identifies the strongest point from another mind
+      and builds on it or challenges it. Uses the specified debate framework to structure the exchange.
+
+      '
+    depends_on:
+    - individual_perspectives
+    skip_if: urgency == "quick"
+    input:
+    - perspectives
+    - framework
+    output:
+    - debate_transcript: string
+    - consensus_points: list
+    - dissenting_views: list
+    frameworks:
+      steel_man:
+        rounds: 2
+        rules: Each mind must articulate the BEST version of a competing perspective before defending their own
+      socratic:
+        rounds: 3
+        rules: Minds ask probing questions of each other, drilling into assumptions
+      hegelian:
+        rounds: 2
+        rules: Thesis -> Antithesis -> Synthesis progression toward resolution
+  - id: synthesize
+    name: Synthesize Recommendations
+    agent: kaven-squad-lead
+    description: 'Steave synthesizes all perspectives and debate into a consolidated recommendation. Identifies consensus,
+      notes dissenting views, and translates into actionable steps with clear ownership assignments to kaven-squad agents.
+
+      '
+    depends_on:
+    - cross_pollination
+    input:
+    - perspectives
+    - debate_transcript
+    - consensus_points
+    - dissenting_views
+    - constraints
+    output:
+    - recommendation: string
+    - action_items: list
+    - trade_offs: list
+  - id: feasibility_review
+    name: Growth/Business Feasibility Review
+    agent: kaven-squad-lead
+    description: 'Steave reviews the growth recommendation for feasibility in the context of Kaven''s current market position,
+      competitive landscape, and business constraints. Validates that the proposed approach aligns with launch timeline, pricing
+      tier structure, and brand positioning (may consult Architect or Product Owner if needed).
+
+      '
+    depends_on:
+    - synthesize
+    input:
+    - recommendation
+    - action_items
+    - affected_areas
+    output:
+    - feasibility_verdict: string
+    - growth_notes: list
+    - revised_action_items: list
+    on_failure: use_original_recommendation
+  - id: generate_evidence
+    name: Generate Evidence Bundle
+    agent: kaven-squad-lead
+    description: 'Compile the complete consultation into an evidence bundle for traceability. Document the full decision-making
+      process for future reference and to enable informed iteration if the growth strategy changes.
+
+      '
+    depends_on:
+    - feasibility_review
+    output:
+    - evidence_bundle:
+        council_transcript: 'Full transcript with framed question, individual perspectives, cross-pollination debate, synthesis,
+          and feasibility review.
+
+          '
+        action_items: 'Final action items with assignee (which kaven-squad agent executes each).
+
+          '
+        dissenting_views: 'Documented disagreements with reasoning for the chosen path.
+
+          '
