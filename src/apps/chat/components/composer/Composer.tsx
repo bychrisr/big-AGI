@@ -876,7 +876,7 @@ export function Composer(props: {
                     variant='outlined'
                     color={isDraw ? 'warning' : isReAct ? 'success' : undefined}
                     autoFocus={isDesktop}
-                    minRows={isMobile ? 3.5 : isDraw ? 4 : agiAttachmentPrompts.hasData ? 3 : showChatInReferenceTo ? 4 : 5}
+                    minRows={1}
                     maxRows={isMobile ? 8 : 10}
                     placeholder={textPlaceholder}
                     value={composeText}

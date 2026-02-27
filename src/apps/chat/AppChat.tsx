@@ -208,9 +208,9 @@ export function AppChat() {
 
   const { mayWork: capabilityHasT2I, mayEdit: capabilityHasT2IEdit } = useCapabilityTextToImage();
 
-  const activeFolderId = useFolderStore(({ enableFolders, folders }) => {
-    const activeFolderId = enableFolders ? _activeFolderId : null;
-    const activeFolder = activeFolderId ? folders.find(folder => folder.id === activeFolderId) : null;
+  const activeFolderId = useFolderStore(({ folders }) => {
+    // folders always enabled in teamAI — no enableFolders gate
+    const activeFolder = _activeFolderId ? folders.find(folder => folder.id === _activeFolderId) : null;
     return activeFolder?.id ?? null;
   });
 
@@ -485,6 +485,7 @@ export function AppChat() {
         chatPanesConversationIds={paneUniqueConversationIds}
         disableNewButton={disableNewButton}
         focusedChatBeamOpen={focusedChatBeamOpen}
+        onBeamOpen={isFocusedChatEmpty ? null : handleMessageBeamLastInFocusedPane}
         onConversationActivate={handleOpenConversationInFocusedPane}
         onConversationBranch={handleConversationBranch}
         onConversationNew={handleConversationNewInFocusedPane}
@@ -493,7 +494,7 @@ export function AppChat() {
         onConversationsImportDialog={handleConversationImportDialog}
         setActiveFolderId={setActiveFolderId}
       />,
-    [activeFolderId, disableNewButton, focusedChatBeamOpen, focusedPaneConversationId, handleConversationBranch, handleConversationExport, handleConversationImportDialog, handleConversationNewInFocusedPane, handleDeleteConversations, handleOpenConversationInFocusedPane, isDrawerOpen, paneUniqueConversationIds],
+    [activeFolderId, disableNewButton, focusedChatBeamOpen, focusedPaneConversationId, handleConversationBranch, handleConversationExport, handleConversationImportDialog, handleConversationNewInFocusedPane, handleDeleteConversations, handleMessageBeamLastInFocusedPane, handleOpenConversationInFocusedPane, isDrawerOpen, isFocusedChatEmpty, paneUniqueConversationIds],
   );
 
   const focusedChatPanelContent = React.useMemo(() => !focusedPaneConversationId ? null :

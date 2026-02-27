@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { Box, Button, Dropdown, IconButton, ListDivider, ListItem, ListItemButton, ListItemDecorator, Menu, MenuButton, MenuItem, Tooltip, Typography } from '@mui/joy';
 import AddIcon from '@mui/icons-material/Add';
+import ScatterPlotIcon from '@mui/icons-material/ScatterPlot';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import AttachFileRoundedIcon from '@mui/icons-material/AttachFileRounded';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
@@ -23,8 +24,6 @@ import { CloseablePopup } from '~/common/components/CloseablePopup';
 import { DFolder, useFolderStore } from '~/common/stores/folders/store-chat-folders';
 import { DebateSessionsSection } from '~/modules/teamai/DebateSessionsSection';
 import { DebouncedInputMemo } from '~/common/components/DebouncedInput';
-import { FoldersToggleOff } from '~/common/components/icons/FoldersToggleOff';
-import { FoldersToggleOn } from '~/common/components/icons/FoldersToggleOn';
 import { OPTIMA_DRAWER_BACKGROUND } from '~/common/layout/optima/optima.config';
 import { OptimaDrawerHeader } from '~/common/layout/optima/drawer/OptimaDrawerHeader';
 import { OptimaDrawerList } from '~/common/layout/optima/drawer/OptimaDrawerList';
@@ -47,17 +46,17 @@ const noFolders: DFolder[] = [];
 /*
  * Lists folders and returns the active folder
  */
-export const useFolders = (activeFolderId: string | null) => useFolderStore(useShallow(({ enableFolders, folders, toggleEnableFolders }) => {
+export const useFolders = (activeFolderId: string | null) => useFolderStore(useShallow(({ folders, toggleEnableFolders }) => {
 
-  // finds the active folder if any
-  const activeFolder = (enableFolders && activeFolderId)
+  // always-on folders: find active folder regardless of the toggle
+  const activeFolder = activeFolderId
     ? folders.find(folder => folder.id === activeFolderId) ?? null
     : null;
 
   return {
     activeFolder,
-    allFolders: enableFolders ? folders : noFolders,
-    enableFolders,
+    allFolders: folders,
+    enableFolders: true, // folders always enabled in teamAI
     toggleEnableFolders,
   };
 }));
@@ -76,6 +75,7 @@ function ChatDrawer(props: {
   onConversationNew: (forceNoRecycle: boolean, isIncognito: boolean) => void,
   onConversationsDelete: (conversationIds: DConversationId[], bypassConfirmation: boolean) => void,
   onConversationsExportDialog: (conversationId: DConversationId | null, exportAll: boolean) => void,
+  onBeamOpen: (() => void) | null,
   onConversationsImportDialog: () => void,
   setActiveFolderId: (folderId: string | null) => void,
 }) {
@@ -100,7 +100,7 @@ function ChatDrawer(props: {
     showPersonaIcons, toggleShowPersonaIcons,
     showRelativeSize, toggleShowRelativeSize,
   } = useChatDrawerFilters();
-  const { activeFolder, allFolders, enableFolders, toggleEnableFolders } = useFolders(props.activeFolderId);
+  const { activeFolder, allFolders } = useFolders(props.activeFolderId);
   const { filteredChatsCount, filteredChatIDs, filteredChatsAreEmpty, filteredChatsBarBasis, filteredChatsIncludeActive, renderNavItems } = useChatDrawerRenderItems(
     props.activeConversationId, props.chatPanesConversationIds, debouncedSearchQuery, activeFolder, allFolders, filterHasStars, filterHasImageAssets, filterHasDocFragments, filterIsArchived, navGrouping, searchSorting, showRelativeSize, searchDepth,
   );
@@ -354,47 +354,26 @@ function ChatDrawer(props: {
   return <>
 
     {/* Drawer Header */}
-    <OptimaDrawerHeader title='Chats' onClose={optimaCloseDrawer}>
-      <Tooltip title={enableFolders ? 'Hide Folders' : 'Use Folders'}>
-        <IconButton size='sm' onClick={toggleEnableFolders}>
-          {enableFolders ? <FoldersToggleOn /> : <FoldersToggleOff />}
-        </IconButton>
-      </Tooltip>
-    </OptimaDrawerHeader>
+    <OptimaDrawerHeader title='teamAI' onClose={optimaCloseDrawer} />
 
-    {/* Folders List (shrink at twice the rate as the Titles) */}
-    {/*<Box sx={{*/}
-    {/*  display: 'grid',*/}
-    {/*  gridTemplateRows: !enableFolders ? '0fr' : '1fr',*/}
-    {/*  transition: 'grid-template-rows 0.42s cubic-bezier(.17,.84,.44,1)',*/}
-    {/*  '& > div': {*/}
-    {/*    padding: enableFolders ? 2 : 0,*/}
-    {/*    transition: 'padding 0.42s cubic-bezier(.17,.84,.44,1)',*/}
-    {/*    overflow: 'hidden',*/}
-    {/*  },*/}
-    {/*}}>*/}
-    {enableFolders && (
-      <ChatFolderList
-        folders={allFolders}
-        // folderChatCounts={folderChatCounts}
-        contentScaling={contentScaling}
-        activeFolderId={props.activeFolderId}
-        onFolderSelect={props.setActiveFolderId}
-        sx={{
-          // shrink this at twice the rate as the Titles list
-          flexGrow: 0, flexShrink: 2, overflow: 'hidden',
-          minHeight: '7.5rem',
-          p: 2,
-          backgroundColor: 'background.level1',
-        }}
-      />
-    )}
-    {/*</Box>*/}
+    {/* Folders/Projects List — always visible in teamAI */}
+    <ChatFolderList
+      folders={allFolders}
+      contentScaling={contentScaling}
+      activeFolderId={props.activeFolderId}
+      onFolderSelect={props.setActiveFolderId}
+      sx={{
+        flexGrow: 0, flexShrink: 2, overflow: 'hidden',
+        minHeight: '4.5rem',
+        p: 2,
+        backgroundColor: 'background.level1',
+      }}
+    />
 
     {/* Chats List */}
     <OptimaDrawerList variant='plain' noTopPadding noBottomPadding tallRows>
 
-      {enableFolders && <ListDivider sx={{ mb: 0 }} />}
+      <ListDivider sx={{ mb: 0 }} />
 
       {/* Search / New Chat */}
       <Box sx={{ display: 'flex', flexDirection: 'column', m: 2, gap: 2 }}>
@@ -529,6 +508,19 @@ function ChatDrawer(props: {
         </ListItemDecorator>
         Delete {filteredChatsCount >= 2 ? `all ${filteredChatsCount} chats` : 'chat'}
       </ListItemButton>
+
+      {/* Beam — multi-mind reasoning */}
+      {!!props.onBeamOpen && (
+        <>
+          <ListDivider sx={{ my: 0 }} />
+          <ListItemButton onClick={props.onBeamOpen} sx={{ color: 'primary.plainColor' }}>
+            <ListItemDecorator sx={{ color: 'inherit' }}>
+              <ScatterPlotIcon />
+            </ListItemDecorator>
+            Beam
+          </ListItemButton>
+        </>
+      )}
 
     </OptimaDrawerList>
 
