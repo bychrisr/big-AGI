@@ -304,18 +304,40 @@ Fase 2 → este fork rodando com Auth Supabase + Beam/debates
 
 ### Stories Completas (Ready for Review)
 Epics 1-6 implementados. 36 minds no MMOS (symlink → /home/bychrisr/projects/personal/mmos-squad/minds/).
+Branch ativa: `feat/debates-by-folder` | Deploy: Vercel (temporário, PRD diz Docker)
 
 ### Arquivos-chave implementados
-- `src/modules/teamai/store-minds.ts` — Zustand store que carrega minds e injeta em SystemPurposes
+- `src/modules/teamai/store-minds.ts` — Zustand store; `buildMemoryContextBlock` injeta user_memories + debate_sessions + CLAUDE.md do projeto
+- `src/modules/teamai/detectAndSaveMemory.ts` — detecta "grava na memória que..." no chat regular e salva via /api/memory
+- `src/modules/teamai/useProjectFolderSync.ts` — sync bidirecional Supabase→Zustand; remove pastas vazias sem backing
+- `src/modules/teamai/MemoriesPanel.tsx` — painel no drawer mostrando user_memories com delete
+- `src/modules/teamai/DebateSessionsSection.tsx` — sessões de debate por projeto no drawer
 - `src/data.ts` — SystemPurposeId estendido para string; SystemPurposes = Record<string,SystemPurposeData>
 - `app/api/minds/` — GET lista + GET :id (auth bypass em dev mode)
-- `app/api/debate/route.ts` — streaming Python subprocess
+- `app/api/debate/route.ts` — streaming Python; salva sessão no Supabase; roda SilentCheckpoint pós-debate
+- `app/api/memory/` — GET/POST/DELETE user_memories (SUPABASE_ENABLED bypass)
+- `app/api/projects/` — GET/POST user_projects com claude_md (SUPABASE_ENABLED bypass)
+- `app/api/debates/` — lista sessões por projeto
+- `src/modules/aifn/autotitle/autoTitle.ts` — auto-title sempre funciona: fallback da 1ª mensagem + refino AI se fastUtil disponível
 - `supabase/migrations/` — 7 migrations (debate_sessions, user_api_keys, user_memories, user_clone, user_preferences, user_projects)
 - `squads-base/mmos-squad/debate_engine/` — Python debate engine + KB compression + session caching
-- `squads-base/mmos-squad/scripts/` — memory_store, silent_checkpoint, cross_project_context, steave_cross_project
+- `squads-base/mmos-squad/scripts/` — memory_store, silent_checkpoint, cross_project_context
+
+### Memory Layer (funcional)
+1. `buildMemoryContextBlock(folderTitle)` → injeta user_memories + debate_sessions recentes + claude_md do projeto
+2. Ativado em `PersonaSelector.tsx` ao selecionar um mind MMOS
+3. Comandos "grava na memória que X" detectados no chat via `detectAndSaveMemory.ts`
+4. SilentCheckpoint detecta padrões implícitos após cada debate
+5. Kaven-framework CLAUDE.md injetado no Supabase para user rodrigues0christian@gmail.com → projeto `kaven`
 
 ### Dev Mode
-- Middleware, /api/minds, /api/debate: bypass auth quando NEXT_PUBLIC_SUPABASE_URL não configurado
+- Middleware, /api/minds, /api/debate, /api/memory, /api/projects: bypass auth quando NEXT_PUBLIC_SUPABASE_URL não configurado
 - TEAMAI_REPO_PATH=path/to/teamAI controla leitura de minds
 - Dev server: npm run dev (porta 3000+)
+
+### Pendências PRD
+- Deploy Docker (PRD Sec 14: "sem Vercel") — Vercel é temporário
+- API keys → Supabase (big-AGI ainda usa localStorage)
+- Painel DNA Mental / clone do usuário
+- Claude Code MCP integration (teamAI receber contexto do CLI)
 <!-- AIOS-MANAGED-END: teamai-implementation-status -->
