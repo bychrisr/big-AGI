@@ -42,6 +42,8 @@ import { useRouterQuery } from '~/common/app.routes';
 import { useUIComplexityIsMinimal } from '~/common/stores/store-ui';
 import { useUXLabsStore } from '~/common/stores/store-ux-labs';
 
+import { useProjectFolderSync } from '~/modules/teamai/useProjectFolderSync';
+
 import { ChatPane } from './components/layout-pane/ChatPane';
 import { ChatBarBeam } from './components/layout-bar/ChatBarBeam';
 import { ChatBarAltTitle } from './components/layout-bar/ChatBarAltTitle';
@@ -139,6 +141,9 @@ export function AppChat() {
   const personaDropdownRef = React.useRef<OptimaBarControlMethods>(null);
   const composerTextAreaRef = React.useRef<HTMLTextAreaElement>(null);
   const [_activeFolderId, setActiveFolderId] = React.useState<string | null>(null);
+
+  // teamAI: sync Supabase projects → local folders on first load
+  useProjectFolderSync();
 
   // external state
   const theme = useTheme();
