@@ -4,6 +4,24 @@ import { createBeamVanillaStore } from '../store-beam_vanilla';
 import type { DebateMind } from './DebateMindSelector';
 
 
+// Mock beam.config to avoid deep import chain (~/modules/blocks/OverlayButton)
+vi.mock('../beam.config', () => ({
+  BEAM_INVERT_BACKGROUND: true,
+  BEAM_BTN_SX: {},
+  BEAM_PANE_ZINDEX: 100,
+  BEAM_SHOW_REASONING_ICON: false,
+  SCATTER_COLOR: 'neutral',
+  SCATTER_DEBUG_STATE: false,
+  SCATTER_PLACEHOLDER: '...',
+  SCATTER_RAY_DEF: 2,
+  SCATTER_RAY_MAX: 8,
+  SCATTER_RAY_MIN: 1,
+  SCATTER_RAY_PRESETS: [2, 4, 8],
+  SCATTER_RAY_SHOW_DRAG_HANDLE: false,
+  GATHER_COLOR: 'success',
+  GATHER_PLACEHOLDER: '...',
+}));
+
 // Mock the module-beam store to avoid localStorage access in tests
 vi.mock('../store-module-beam', () => ({
   useModuleBeamStore: {
@@ -15,6 +33,29 @@ vi.mock('../store-module-beam', () => ({
 // Mock LLM heuristic — no LLMs available in test env
 vi.mock('~/common/stores/llms/store-llms-domains_slice', () => ({
   llmsHeuristicGetTopDiverseLlmIds: () => [],
+}));
+
+// Mock AIX client (not used in debate mode tests, but imported by beam.scatter)
+vi.mock('~/modules/aix/client/aix.client', () => ({
+  aixChatGenerateContent_DMessage_FromConversation: vi.fn(),
+}));
+
+// Mock LLM store
+vi.mock('~/common/stores/llms/store-llms', () => ({
+  findLLMOrThrow: vi.fn(),
+}));
+
+// Mock UX labs store
+vi.mock('~/common/stores/store-ux-labs', () => ({
+  getUXLabsHighPerformance: () => false,
+}));
+
+// Mock chat conversation utilities
+vi.mock('~/common/stores/chat/chat.conversation', () => ({
+  splitSystemMessageFromHistory: (history: unknown[]) => ({
+    chatSystemInstruction: null,
+    chatHistory: history,
+  }),
 }));
 
 
