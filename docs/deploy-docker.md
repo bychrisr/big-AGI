@@ -65,6 +65,38 @@ To make local services running on your host machine accessible to a Docker conta
 
 <br/>
 
+### Symlinks and Volumes (teamAI)
+
+The teamAI repo must be mounted as a read-only volume. Symlinks are preserved natively on Docker Linux.
+
+#### Volume mount
+
+In `docker-compose.yml`, the teamAI repo is mounted at `/app/teamai-repo`:
+
+```yaml
+volumes:
+  - ${TEAMAI_REPO_PATH}:/app/teamai-repo:ro
+```
+
+This provides read-only access to minds, squads, and metadata files. The `TEAMAI_REPO_PATH` environment variable should point to your local teamAI repo clone.
+
+#### Platform notes
+
+| Platform | Symlink support |
+|----------|----------------|
+| **Linux host** | Works natively. Symlinks inside the mounted volume resolve correctly. |
+| **macOS host** | Works with Docker Desktop. Symlinks are resolved at mount time. |
+| **Windows host** | Requires WSL2 backend for Docker Desktop. Native Windows symlinks are not preserved in Docker volumes. Enable WSL2 integration in Docker Desktop settings and clone the repo inside WSL2. |
+
+#### Troubleshooting
+
+If minds fail to load inside the container, verify that:
+1. The volume mount path is correct: `docker exec <container> ls /app/teamai-repo/`
+2. Symlinks resolve: `docker exec <container> readlink -f /app/teamai-repo/squads-base/mmos-squad/minds`
+3. The entire repo is mounted (not a subdirectory), as symlinks pointing outside the mount will break
+
+<br/>
+
 ### Reverse Proxy Configuration
 
 A reverse proxy is a server that sits in front of big-AGI's container and can forwards web

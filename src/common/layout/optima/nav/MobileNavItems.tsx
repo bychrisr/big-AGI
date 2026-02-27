@@ -2,12 +2,20 @@ import * as React from 'react';
 import Router from 'next/router';
 
 import { Box, Button, ButtonGroup, ColorPaletteProp, Sheet } from '@mui/joy';
+import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 
 import { ROUTE_APP_NEWS } from '~/common/app.routes';
 import { checkDivider, checkVisibileIcon, NavItemApp, navItems } from '~/common/app.nav';
+import { createSupabaseBrowserClient } from '~/common/supabase/client';
 
 import { BringTheLove } from './BringTheLove';
 import { optimaCloseDrawer, optimaOpenModels } from '../useOptima';
+
+
+const SUPABASE_ENABLED = Boolean(
+  process.env.NEXT_PUBLIC_SUPABASE_URL
+  && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+);
 
 
 // configuration
@@ -78,6 +86,12 @@ export function MobileNavItems(props: { currentApp?: NavItemApp }) {
     void Router.push(path);
     if (closeDrawer)
       optimaCloseDrawer();
+  }, []);
+
+  const handleLogout = React.useCallback(async () => {
+    const supabase = createSupabaseBrowserClient();
+    await supabase.auth.signOut();
+    window.location.href = '/login';
   }, []);
 
   navItems.apps.forEach((app) => {
@@ -153,6 +167,20 @@ export function MobileNavItems(props: { currentApp?: NavItemApp }) {
           link={navItems.links[0].href}
           sx={_styles.button}
         />
+
+        {/* Logout (only when Supabase Auth is enabled) */}
+        {SUPABASE_ENABLED && (
+          <Button
+            size='sm'
+            color='neutral'
+            variant='plain'
+            onClick={handleLogout}
+            sx={_styles.button}
+          >
+            <LogoutRoundedIcon />
+            Logout
+          </Button>
+        )}
       </Box>
 
     </Sheet>

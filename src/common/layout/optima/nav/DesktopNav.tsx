@@ -7,6 +7,7 @@ import ArrowOutwardRoundedIcon from '@mui/icons-material/ArrowOutwardRounded';
 import CodeIcon from '@mui/icons-material/Code';
 import HistoryIcon from '@mui/icons-material/History';
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
+import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import MenuIcon from '@mui/icons-material/Menu';
 import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
 import TerminalOutlinedIcon from '@mui/icons-material/TerminalOutlined';
@@ -26,11 +27,19 @@ import { themeZIndexDesktopNav } from '~/common/app.theme';
 import { useHasLLMs } from '~/common/stores/llms/llms.hooks';
 import { useOverlayComponents } from '~/common/layout/overlays/useOverlayComponents';
 
+import { createSupabaseBrowserClient } from '~/common/supabase/client';
+
 import { BringTheLove } from './BringTheLove';
 import { DesktopNavGroupBox, DesktopNavIcon, navItemClasses } from './DesktopNavIcon';
 import { InvertedBar, InvertedBarCornerItem } from '../InvertedBar';
 import { optimaActions, optimaOpenModels, optimaOpenPreferences, optimaToggleDrawer, useOptimaDrawerOpen, useOptimaDrawerPeeking, useOptimaModals } from '../useOptima';
 import { scratchClipSupported, useScratchClipVisibility } from '../scratchclip/store-scratchclip';
+
+
+const SUPABASE_ENABLED = Boolean(
+  process.env.NEXT_PUBLIC_SUPABASE_URL
+  && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+);
 
 
 export const bigAgiProUrl = 'https://big-agi.com' + clientUtmSource('upgrade-apps');
@@ -106,6 +115,13 @@ export function DesktopNav(props: { component: React.ElementType, currentApp?: N
     );
   }, [showPromisedOverlay]);
 
+
+  // handlers
+  const handleLogout = React.useCallback(async () => {
+    const supabase = createSupabaseBrowserClient();
+    await supabase.auth.signOut();
+    window.location.href = '/login';
+  }, []);
 
   // show/hide the pane when clicking on the logo
   const appUsesDrawer = !props.currentApp?.hideDrawer;
@@ -334,6 +350,16 @@ export function DesktopNav(props: { component: React.ElementType, currentApp?: N
         {/*<UserNavIcon />*/}
         {navExtLinkItems}
         {navModalItems}
+        {SUPABASE_ENABLED && (
+          <Tooltip disableInteractive title='Logout'>
+            <DesktopNavIcon
+              onClick={handleLogout}
+              className={navItemClasses.typeLinkOrModal}
+            >
+              <LogoutRoundedIcon />
+            </DesktopNavIcon>
+          </Tooltip>
+        )}
       </DesktopNavGroupBox>
 
     </InvertedBar>
