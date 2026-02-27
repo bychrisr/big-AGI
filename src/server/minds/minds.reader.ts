@@ -187,10 +187,87 @@ export function readUserMinds(teamaiRepoPath: string, userId: string): MindMetad
   const cached = getCached(cacheKey);
   if (cached) return cached;
 
+  const minds: MindMetadata[] = [];
+
+  // Minds avulsos do usuário (users/{userId}/minds/)
   const userMindsDir = path.join(teamaiRepoPath, 'users', userId, 'minds');
-  const minds = readMindsFromDir(userMindsDir, 'custom');
+  minds.push(...readMindsFromDir(userMindsDir, 'custom'));
+
+  // Agentes de squads do usuário (users/{userId}/squads/*/agents/*.md)
+  const userSquadsDir = path.join(teamaiRepoPath, 'users', userId, 'squads');
+  minds.push(...readUserSquadAgents(userSquadsDir));
+
   setCached(cacheKey, minds);
   return minds;
+}
+
+
+/**
+ * Lê agentes de squads do usuário como minds customizados.
+ * Cada arquivo agents/*.md vira um MindMetadata usando o próprio .md como system prompt.
+ */
+function readUserSquadAgents(squadsDir: string): MindMetadata[] {
+  if (!fs.existsSync(squadsDir)) return [];
+
+  const minds: MindMetadata[] = [];
+  const squadEntries = fs.readdirSync(squadsDir, { withFileTypes: true });
+
+  for (const squadEntry of squadEntries) {
+    if (!squadEntry.isDirectory()) continue;
+    const squadName = squadEntry.name;
+    const agentsDir = path.join(squadsDir, squadName, 'agents');
+    if (!fs.existsSync(agentsDir)) continue;
+
+    const agentFiles = fs.readdirSync(agentsDir).filter(f => f.endsWith('.md'));
+    for (const agentFile of agentFiles) {
+      const agentPath = path.join(agentsDir, agentFile);
+      const mind = readSquadAgentFromFile(agentPath, squadName);
+      if (mind) minds.push(mind);
+    }
+  }
+
+  return minds;
+}
+
+
+/**
+ * Converte um arquivo de agente AIOS (.md com bloco YAML) em MindMetadata.
+ * O arquivo completo é usado como system prompt — é o formato esperado pelo AIOS.
+ */
+function readSquadAgentFromFile(agentPath: string, squadName: string): MindMetadata | null {
+  const slug = path.basename(agentPath, '.md');
+
+  let content: string;
+  try {
+    content = fs.readFileSync(agentPath, 'utf-8');
+  } catch {
+    console.warn(`[minds.reader] Falha ao ler agente: ${agentPath}`);
+    return null;
+  }
+
+  // Extrai name do campo "name:" dentro do bloco YAML do agente
+  const nameMatch = content.match(/^agent:\s*\n(?:.*\n)*?(?:\s+name:\s+(.+))/m);
+  const name = nameMatch?.[1]?.trim() ?? slugToName(slug);
+
+  // Extrai title/specialty
+  const titleMatch = content.match(/^\s+title:\s+(.+)/m);
+  const specialty = titleMatch?.[1]?.trim() ?? '';
+
+  // Preview das primeiras 200 chars (sem o cabeçalho ACTIVATION-NOTICE)
+  const systemPromptPreview = content.slice(0, 200).replace(/\n/g, ' ').trim();
+
+  return {
+    id: slug,
+    name,
+    specialty: specialty || slugToName(slug),
+    tags: ['squad', squadName],
+    tokenBudget: 15000,
+    source: 'custom',
+    systemPromptPreview,
+    systemPromptPath: agentPath,  // o .md inteiro é o system prompt
+    status: 'active',
+    category: squadName,
+  };
 }
 
 
