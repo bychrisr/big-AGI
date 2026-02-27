@@ -53,13 +53,14 @@ async function debateChatGenerateContent(
   topic: string,
   userMessage: string,
   sessionId: string,
+  projectName: string | undefined,
   onChunk: (text: string) => void,
   signal: AbortSignal,
 ): Promise<void> {
   const response = await fetch('/api/debate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ minds: [mindId], topic, user_message: userMessage, session_id: sessionId }),
+    body: JSON.stringify({ minds: [mindId], topic, user_message: userMessage, session_id: sessionId, project_name: projectName }),
     signal,
   });
 
@@ -118,6 +119,7 @@ interface DebateContext {
   topic: string;
   userMessage: string;
   sessionId: string;
+  projectName?: string;
 }
 
 
@@ -152,6 +154,7 @@ function rayScatterStart(
       debateContext.topic,
       debateContext.userMessage,
       debateContext.sessionId,
+      debateContext.projectName,
       (text: string) => {
         accumulatedText += text;
         _rayUpdate(ray.rayId, (r) => ({
