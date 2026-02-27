@@ -16,8 +16,12 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import StarOutlineRoundedIcon from '@mui/icons-material/StarOutlineRounded';
 
 import type { DConversationId } from '~/common/stores/chat/chat.conversation';
+import { createDConversation } from '~/common/stores/chat/chat.conversation';
+import { createDMessageTextContent } from '~/common/stores/chat/chat.message';
+import { useChatStore } from '~/common/stores/chat/store-chats';
 import { CloseablePopup } from '~/common/components/CloseablePopup';
 import { DFolder, useFolderStore } from '~/common/stores/folders/store-chat-folders';
+import { DebateSessionsSection } from '~/modules/teamai/DebateSessionsSection';
 import { DebouncedInputMemo } from '~/common/components/DebouncedInput';
 import { FoldersToggleOff } from '~/common/components/icons/FoldersToggleOff';
 import { FoldersToggleOn } from '~/common/components/icons/FoldersToggleOn';
@@ -164,6 +168,60 @@ function ChatDrawer(props: {
     // Close the menu
     setFolderChangeRequest(null);
   }, []);
+
+
+  // Debate sessions
+
+  const handleOpenDebateSession = React.useCallback(async (sessionId: string, topic: string, minds: string[]) => {
+    try {
+      const res = await fetch(`/api/debates?id=${encodeURIComponent(sessionId)}`);
+      if (!res.ok) return;
+      const json = await res.json() as { session?: { turns?: Array<{ mind_slug: string; user_message: string; response: string }> } };
+      const turns = json.session?.turns ?? [];
+
+      // Group turns by user_message (debate round)
+      const rounds = new Map<string, Array<{ mind_slug: string; response: string }>>();
+      for (const turn of turns) {
+        const round = turn.user_message ?? 'Debate';
+        if (!rounds.has(round)) rounds.set(round, []);
+        rounds.get(round)!.push({ mind_slug: turn.mind_slug, response: turn.response });
+      }
+
+      const conversation = createDConversation();
+      conversation.autoTitle = topic.split(' — ')[0]?.slice(0, 60) ?? topic.slice(0, 60);
+
+      for (const [roundTitle, roundTurns] of rounds) {
+        // User message = round title
+        conversation.messages.push(createDMessageTextContent('user', roundTitle));
+
+        // One assistant message per mind turn
+        for (const turn of roundTurns) {
+          const mindLabel = turn.mind_slug.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+          conversation.messages.push(
+            createDMessageTextContent('assistant', `**${mindLabel}**\n\n${turn.response}`)
+          );
+        }
+      }
+
+      // Add a fresh user prompt at the end to invite continuation
+      const mindsLabel = minds.slice(0, 3).map((m: string) => m.split('_')[0]).join(', ');
+      conversation.messages.push(createDMessageTextContent('user',
+        `[Continuando o debate com ${mindsLabel}${minds.length > 3 ? ` e mais ${minds.length - 3}` : ''}]`
+      ));
+
+      const newConvId = useChatStore.getState().importConversation(conversation, false);
+      onConversationActivate(newConvId);
+      if (getIsMobile()) optimaCloseDrawer();
+    } catch {
+      // silent fail
+    }
+  }, [onConversationActivate]);
+
+  const handleNewDebateSession = React.useCallback(() => {
+    // For now: open a new chat. Full debate UI comes later.
+    onConversationNew(true, false);
+    if (getIsMobile()) optimaCloseDrawer();
+  }, [onConversationNew]);
 
 
   // Render limit - load more items
@@ -473,6 +531,13 @@ function ChatDrawer(props: {
       </ListItemButton>
 
     </OptimaDrawerList>
+
+    {/* teamAI: Debate Sessions — only shown when a folder/project is active */}
+    <DebateSessionsSection
+      activeProjectName={activeFolder ? activeFolder.title.toLowerCase() : null}
+      onOpenSession={handleOpenDebateSession}
+      onNewSession={handleNewDebateSession}
+    />
 
 
     {/* [Menu] Chat Item Folder Change */}
