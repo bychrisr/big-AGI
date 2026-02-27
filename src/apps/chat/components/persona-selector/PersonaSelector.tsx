@@ -12,7 +12,8 @@ import TelegramIcon from '@mui/icons-material/Telegram';
 
 import { SystemPurposeData, SystemPurposeExample, SystemPurposeId, SystemPurposes } from '../../../../data';
 
-import { buildMemoryContextBlock, fetchMindSystemPrompt, registeredMindIds, useMindsStore } from '~/modules/teamai/store-minds';
+import { fetchMindSystemPrompt, registeredMindIds, useMindsStore } from '~/modules/teamai/store-minds';
+import { warmMindCache } from '~/modules/teamai/store-memory-context';
 import type { MindMetadata } from '~/modules/teamai/store-minds';
 import { YouTubeURLInput } from '~/modules/youtube/YouTubeURLInput';
 import { bareBonesPromptMixer } from '~/modules/persona/pmix/pmix';
@@ -272,33 +273,34 @@ export function PersonaSelector(props: {
 
   const toggleEditMode = React.useCallback(() => setEditMode(on => !on), []);
 
-  // MMOS mind handler: fetch full system prompt + inject memory context, then activate
+  // MMOS mind handler: fetch full system prompt, warm memory cache, then activate.
+  // Memory injection happens via store-memory-context (warmMindCache), not inline here.
+  // On every subsequent message send, _handleExecute refreshes memory via ensureFreshMindSystemMessage.
   const handleMindSelected = React.useCallback(async (mindId: string) => {
     if (!setSystemPurposeId) return;
 
-    // If already registered in SystemPurposes with a preview, activate immediately
+    // Activate immediately with the cached preview prompt (visible right away)
     if (SystemPurposes[mindId]) {
       setSystemPurposeId(props.conversationId, mindId);
     }
 
-    // Fetch full system prompt in background and update
     setLoadingMindId(mindId);
-    const [fullPrompt, memoryBlock] = await Promise.all([
-      fetchMindSystemPrompt(mindId),
-      // Find active project folder for this conversation to inject debate context
-      (async () => {
-        const folders = useFolderStore.getState().folders;
-        const activeFolder = folders.find(f => f.conversationIds.includes(props.conversationId));
-        return buildMemoryContextBlock(activeFolder?.title);
-      })(),
-    ]);
-    setLoadingMindId(null);
+
+    const fullPrompt = await fetchMindSystemPrompt(mindId);
 
     if (fullPrompt && SystemPurposes[mindId]) {
-      // Append memory layer context (memories + recent debates) to system prompt
-      SystemPurposes[mindId]!.systemMessage = fullPrompt + memoryBlock;
+      // Set base prompt for display (no memory yet)
+      SystemPurposes[mindId]!.systemMessage = fullPrompt;
+
+      // Warm cache: fetch memory block and update SystemPurposes with combined prompt.
+      // This pre-warms the cache so the first message uses fresh memory with no extra delay.
+      const activeFolder = useFolderStore.getState().folders.find(
+        f => f.conversationIds.includes(props.conversationId),
+      );
+      await warmMindCache(mindId, fullPrompt, activeFolder?.title);
     }
 
+    setLoadingMindId(null);
     setSystemPurposeId(props.conversationId, mindId);
   }, [props.conversationId, setSystemPurposeId]);
 

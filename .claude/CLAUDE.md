@@ -308,7 +308,8 @@ Branch ativa: `feat/debates-by-folder` | Deploy: Vercel (temporário, PRD diz Do
 
 ### Arquivos-chave implementados
 - `src/modules/teamai/store-minds.ts` — Zustand store; `buildMemoryContextBlock` injeta user_memories + debate_sessions + CLAUDE.md do projeto
-- `src/modules/teamai/detectAndSaveMemory.ts` — detecta "grava na memória que..." no chat regular e salva via /api/memory
+- `src/modules/teamai/store-memory-context.ts` — **[NOVO]** cache module-level (TTL 2min) para system prompts de minds MMOS; `ensureFreshMindSystemMessage` + `warmMindCache` + `invalidateMindCache`
+- `src/modules/teamai/detectAndSaveMemory.ts` — detecta "grava na memória que..." no chat regular, salva via /api/memory e invalida cache do mind
 - `src/modules/teamai/useProjectFolderSync.ts` — sync bidirecional Supabase→Zustand; remove pastas vazias sem backing
 - `src/modules/teamai/MemoriesPanel.tsx` — painel no drawer mostrando user_memories com delete
 - `src/modules/teamai/DebateSessionsSection.tsx` — sessões de debate por projeto no drawer
@@ -323,17 +324,22 @@ Branch ativa: `feat/debates-by-folder` | Deploy: Vercel (temporário, PRD diz Do
 - `squads-base/mmos-squad/debate_engine/` — Python debate engine + KB compression + session caching
 - `squads-base/mmos-squad/scripts/` — memory_store, silent_checkpoint, cross_project_context
 
-### Memory Layer (funcional)
-1. `buildMemoryContextBlock(folderTitle)` → injeta user_memories + debate_sessions recentes + claude_md do projeto
-2. Ativado em `PersonaSelector.tsx` ao selecionar um mind MMOS
-3. Comandos "grava na memória que X" detectados no chat via `detectAndSaveMemory.ts`
-4. SilentCheckpoint detecta padrões implícitos após cada debate
-5. Kaven-framework CLAUDE.md injetado no Supabase para user rodrigues0christian@gmail.com → projeto `kaven`
+### Memory Layer (Story 4.3 — injeção no middleware AIX)
+Arquitetura refatorada: memórias injetadas em `_handleExecute.ts` antes de CADA chamada AIX (não mais one-shot no PersonaSelector).
+
+Fluxo correto:
+1. Mind selecionado → `warmMindCache(mindId, basePrompt, folderTitle)` pré-aquece cache (base + memórias + debates)
+2. Cada mensagem enviada → `_handleExecute` chama `ensureFreshMindSystemMessage(mindId, folderTitle)`
+   - Cache fresh (<2min, mesma pasta): retorna combinado instantaneamente
+   - Cache stale: re-busca memory block (mantém base prompt em cache)
+3. `SystemPurposes[mindId].systemMessage = combinado` → `inlineUpdatePurposeInHistory` usa prompt fresco
+4. "grava na memória que X" → `detectAndSaveMemory` salva + `invalidateMindCache` → próxima mensagem inclui memória nova
+5. Page reload: cache limpo, primeira mensagem re-busca tudo automaticamente
 
 ### Dev Mode
 - Middleware, /api/minds, /api/debate, /api/memory, /api/projects: bypass auth quando NEXT_PUBLIC_SUPABASE_URL não configurado
 - TEAMAI_REPO_PATH=path/to/teamAI controla leitura de minds
-- Dev server: npm run dev (porta 3000+)
+- Dev server: npm run dev (porta 3001 em produção local — 3000 pode estar em uso por outro projeto)
 
 ### Pendências PRD
 - Deploy Docker (PRD Sec 14: "sem Vercel") — Vercel é temporário

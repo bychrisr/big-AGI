@@ -12,6 +12,7 @@
  */
 
 import { registeredMindIds } from './store-minds';
+import { invalidateMindCache } from './store-memory-context';
 
 
 interface MemoryMatch {
@@ -78,11 +79,15 @@ export async function detectAndSaveMemory(
   if (!match) return;
 
   try {
-    await fetch('/api/memory', {
+    const res = await fetch('/api/memory', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: match.key, value: match.value, source: 'explicit' }),
     });
+    // Invalidate cache so the next message re-fetches memories and includes the new one
+    if (res.ok) {
+      invalidateMindCache(activePersonaId);
+    }
   } catch {
     // Silent — never block the chat
   }
