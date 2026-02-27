@@ -213,7 +213,11 @@ function readUserSquadAgents(squadsDir: string): MindMetadata[] {
   const squadEntries = fs.readdirSync(squadsDir, { withFileTypes: true });
 
   for (const squadEntry of squadEntries) {
-    if (!squadEntry.isDirectory()) continue;
+    // Follow symlinks: Dirent.isDirectory() returns false for symlinks even if they point to dirs
+    const entryPath = path.join(squadsDir, squadEntry.name);
+    const isDir = squadEntry.isDirectory() ||
+      (squadEntry.isSymbolicLink() && fs.statSync(entryPath).isDirectory());
+    if (!isDir) continue;
     const squadName = squadEntry.name;
     const agentsDir = path.join(squadsDir, squadName, 'agents');
     if (!fs.existsSync(agentsDir)) continue;
