@@ -12,7 +12,7 @@ export const COUNCILS: Record<string, CouncilConfig> = {
     name: 'Growth Council',
     icon: '📈',
     description: 'Estratégia de crescimento e marketing',
-    mindIds: ['alex_hormozi', 'paul_graham', 'seth_godin', 'eugene_schwartz'],
+    mindIds: ['alex_hormozi', 'paul_graham', 'seth_godin', 'eugene_schwartz', 'leandro_aguiari'],
   },
   product: {
     name: 'Product Council',

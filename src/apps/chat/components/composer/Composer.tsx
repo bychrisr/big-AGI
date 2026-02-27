@@ -58,7 +58,7 @@ import { LLMAttachmentDraftsAction, LLMAttachmentsList } from './llmattachments/
 import { PhPaintBrush } from '~/common/components/icons/phosphor/PhPaintBrush';
 import { useAttachmentDrafts } from '~/common/attachment-drafts/useAttachmentDrafts';
 import { detectAndSaveMemory } from '~/modules/teamai/detectAndSaveMemory';
-import { parseAgentCommand, isAgentPersona, COUNCILS } from '~/modules/teamai/agentCommands';
+import { parseAgentCommand, COUNCILS } from '~/modules/teamai/agentCommands';
 import { useDebateTriggerStore } from '~/modules/teamai/store-debate-trigger';
 import { useLLMAttachmentDrafts } from './llmattachments/useLLMAttachmentDrafts';
 
@@ -460,9 +460,9 @@ export function Composer(props: {
       return;
     }
 
-    // Agent command detection: *consult-growth/product or *think when agent persona active
+    // Agent command detection: *consult-growth/product or *think
     const agentCmd = parseAgentCommand(composeText);
-    if (agentCmd && isAgentPersona(systemPurposeId)) {
+    if (agentCmd) {
       const council = COUNCILS[agentCmd.council];
       if (council) {
         useDebateTriggerStore.getState().setPending({
@@ -479,7 +479,7 @@ export function Composer(props: {
     }
 
     await handleSendAction(chatExecuteMode, composeText); // 'chat/write/...' button
-  }, [chatExecuteMode, composeText, handleFinishMicAndSend, handleSendAction, micIsRunning, recognitionState.isActive, systemPurposeId, _handleClearText]);
+  }, [chatExecuteMode, composeText, handleFinishMicAndSend, handleSendAction, micIsRunning, recognitionState.isActive, _handleClearText]);
 
   const handleSendTextBeamClicked = React.useCallback(async () => {
     if (micIsRunning) {
