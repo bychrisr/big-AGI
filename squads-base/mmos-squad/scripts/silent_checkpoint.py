@@ -100,7 +100,10 @@ class SilentCheckpoint:
         return candidates
 
     def commit(self, user_id: str, candidates: list[MemoryCandidate]) -> int:
-        """Persiste candidatos committable via MemoryStore.
+        """Persiste candidatos committable via MemoryStore com deduplicação.
+
+        Antes de commitar, verifica se a chave já existe. Só atualiza se a
+        nova confidence for maior que a existente (Task 3.4).
 
         Args:
             user_id: ID do usuário.
@@ -112,7 +115,22 @@ class SilentCheckpoint:
         committed = 0
         committable = [c for c in candidates if c.is_committable()]
 
+        # Buscar memórias existentes para deduplicação
+        try:
+            existing = {m.key: m.confidence for m in self._store.get_memories(user_id, limit=100)}
+        except Exception:
+            existing = {}
+
         for candidate in committable:
+            # Deduplicação: só atualiza se confidence nova > existente
+            existing_conf = existing.get(candidate.key, 0.0)
+            if existing_conf >= candidate.confidence:
+                logger.debug(
+                    "Checkpoint skip (dedup): %s conf %.2f <= existing %.2f",
+                    candidate.key, candidate.confidence, existing_conf,
+                )
+                continue
+
             try:
                 self._store.record_explicit(
                     user_id=user_id,
@@ -169,9 +187,10 @@ class SilentCheckpoint:
             for pattern in _REFORMAT_RE:
                 m = pattern.search(msg)
                 if m:
+                    preferred = self._extract_preferred_format(msg)
                     return MemoryCandidate(
                         key="preferencia_formato",
-                        value=msg.strip()[:100],
+                        value=preferred or msg.strip()[:100],
                         confidence=0.75,
                         source_trigger="reformat_request",
                     )
@@ -179,3 +198,29 @@ class SilentCheckpoint:
 
     def _detect_theme_expanded(self, session: DebateSessionData) -> bool:
         return len(session.turns) > 5
+
+    def _extract_preferred_format(self, message: str) -> str | None:
+        """Extrai o formato preferido de uma mensagem de pedido de reformatação.
+
+        Retorna string descritiva do formato ou None se não identificado.
+
+        Args:
+            message: Mensagem do usuário com pedido de reformatação.
+
+        Returns:
+            String descritiva do formato preferido, ou None.
+        """
+        format_map = [
+            (r"tabela", "tabela"),
+            (r"bullet\s*points?", "bullet points"),
+            (r"mais\s+curto", "respostas mais curtas"),
+            (r"lista\s+numerada", "lista numerada"),
+            (r"t[oó]picos?", "formato em tópicos"),
+            (r"markdown", "markdown"),
+            (r"reformata", "reformatado"),
+        ]
+        msg_lower = message.lower()
+        for pattern, label in format_map:
+            if re.search(pattern, msg_lower):
+                return label
+        return None

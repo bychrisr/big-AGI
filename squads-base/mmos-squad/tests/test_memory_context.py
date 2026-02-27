@@ -143,3 +143,52 @@ def test_boost_by_topic_returns_sorted_list(
     boosted = provider._boost_by_topic(memories, "formato")
     # "formato_saida" tem match no key "formato", deve vir primeiro
     assert boosted[0].key == "formato_saida"
+
+
+# Task 5.6 — _estimate_tokens retorna estimativa razoável
+def test_estimate_tokens_short_text(provider: MemoryContextProvider) -> None:
+    """_estimate_tokens retorna valor positivo para texto curto."""
+    result = provider._estimate_tokens("hello world")
+    assert result >= 1
+
+
+def test_estimate_tokens_reasonable_margin(provider: MemoryContextProvider) -> None:
+    """_estimate_tokens fica dentro de 20% do valor esperado (chars / 4)."""
+    text = "a" * 400  # 400 chars → esperado ≈ 100 tokens
+    result = provider._estimate_tokens(text)
+    expected = 100  # 400 * 0.25
+    assert abs(result - expected) <= expected * 0.20
+
+
+def test_estimate_tokens_empty_returns_one(provider: MemoryContextProvider) -> None:
+    """_estimate_tokens retorna pelo menos 1 para texto vazio."""
+    assert provider._estimate_tokens("") >= 1
+
+
+# Task 5.7 — last_applied atualizado após injeção
+def test_last_applied_updated_after_injection(
+    provider: MemoryContextProvider, mock_store: MagicMock
+) -> None:
+    """Após get_context_block, record_explicit é chamado para cada memória injetada."""
+    mock_store.get_memories.return_value = [
+        make_memory("formato", "bullet points", 1.0),
+        make_memory("linguagem", "Python", 0.9),
+    ]
+    mock_store.record_explicit.return_value = None
+
+    provider.get_context_block("user-123")
+
+    # Deve ter chamado record_explicit para cada memória injetada
+    assert mock_store.record_explicit.call_count == 2
+    calls = {call.args[1] for call in mock_store.record_explicit.call_args_list}
+    assert "formato" in calls
+    assert "linguagem" in calls
+
+
+def test_last_applied_not_called_for_empty_memories(
+    provider: MemoryContextProvider, mock_store: MagicMock
+) -> None:
+    """Quando não há memórias, record_explicit não é chamado."""
+    mock_store.get_memories.return_value = []
+    provider.get_context_block("user-empty")
+    mock_store.record_explicit.assert_not_called()

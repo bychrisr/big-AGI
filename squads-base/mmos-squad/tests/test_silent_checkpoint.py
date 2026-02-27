@@ -8,7 +8,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
+from memory_store import Memory
 from silent_checkpoint import DebateSessionData, MemoryCandidate, SilentCheckpoint
+
+
+def make_memory(key: str, confidence: float) -> Memory:
+    return Memory(user_id="u1", key=key, value="v", confidence=confidence, source="checkpoint")
 
 
 @pytest.fixture()
@@ -16,6 +21,7 @@ def mock_store() -> MagicMock:
     """Fixture: MemoryStore mockado."""
     store = MagicMock()
     store.record_explicit.return_value = MagicMock()
+    store.get_memories.return_value = []  # deduplicação — sem histórico por padrão
     return store
 
 
@@ -204,3 +210,82 @@ async def test_run_async_handles_exception_silently(
     )
     # Não deve levantar exceção
     await cp.run_async("user-123", session)
+
+
+# ─── Task 2.6: _extract_preferred_format ─────────────────────────────────────
+
+def test_extract_preferred_format_tabela(checkpoint: SilentCheckpoint) -> None:
+    """'coloca em tabela' → 'tabela'."""
+    assert checkpoint._extract_preferred_format("coloca em tabela") == "tabela"
+
+
+def test_extract_preferred_format_bullet_points(checkpoint: SilentCheckpoint) -> None:
+    """'formato bullet points' → 'bullet points'."""
+    assert checkpoint._extract_preferred_format("formato bullet points") == "bullet points"
+
+
+def test_extract_preferred_format_mais_curto(checkpoint: SilentCheckpoint) -> None:
+    """'mais curto' → 'respostas mais curtas'."""
+    assert checkpoint._extract_preferred_format("quero mais curto") == "respostas mais curtas"
+
+
+def test_extract_preferred_format_topicos(checkpoint: SilentCheckpoint) -> None:
+    """'em tópicos' → 'formato em tópicos'."""
+    assert checkpoint._extract_preferred_format("coloca em tópicos") == "formato em tópicos"
+
+
+def test_extract_preferred_format_unknown_returns_none(checkpoint: SilentCheckpoint) -> None:
+    """Mensagem sem formato reconhecido retorna None."""
+    assert checkpoint._extract_preferred_format("resposta normal") is None
+
+
+def test_reformat_candidate_uses_extracted_format(checkpoint: SilentCheckpoint) -> None:
+    """_detect_user_reformatted usa _extract_preferred_format para o value."""
+    session = DebateSessionData(
+        user_messages=["coloca em tabela isso aí"],
+        turns=[{}],
+    )
+    candidates = checkpoint.analyze(session)
+    reformat = next((c for c in candidates if c.key == "preferencia_formato"), None)
+    assert reformat is not None
+    assert reformat.value == "tabela"
+
+
+# ─── Task 3.4: deduplicação em commit() ──────────────────────────────────────
+
+def test_commit_dedup_skips_lower_confidence(
+    checkpoint: SilentCheckpoint, mock_store: MagicMock
+) -> None:
+    """Não commita se confidence nova <= confidence existente no store."""
+    mock_store.get_memories.return_value = [make_memory("preferencia_formato", 0.90)]
+
+    committed = checkpoint.commit(
+        "user-1", [MemoryCandidate(key="preferencia_formato", value="tabela", confidence=0.75)]
+    )
+    assert committed == 0
+    mock_store.record_explicit.assert_not_called()
+
+
+def test_commit_dedup_updates_when_higher_confidence(
+    checkpoint: SilentCheckpoint, mock_store: MagicMock
+) -> None:
+    """Commita se confidence nova > confidence existente."""
+    mock_store.get_memories.return_value = [make_memory("preferencia_formato", 0.60)]
+
+    committed = checkpoint.commit(
+        "user-1", [MemoryCandidate(key="preferencia_formato", value="tabela", confidence=0.80)]
+    )
+    assert committed == 1
+    mock_store.record_explicit.assert_called_once()
+
+
+def test_commit_dedup_always_commits_new_key(
+    checkpoint: SilentCheckpoint, mock_store: MagicMock
+) -> None:
+    """Chave nova (sem histórico) é sempre commitada se committable."""
+    mock_store.get_memories.return_value = []
+
+    committed = checkpoint.commit(
+        "user-1", [MemoryCandidate(key="nova_chave", value="valor", confidence=0.80)]
+    )
+    assert committed == 1

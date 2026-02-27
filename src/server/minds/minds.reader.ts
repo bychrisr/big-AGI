@@ -122,7 +122,7 @@ function readMindFromDir(mindDir: string, source: 'shared' | 'custom'): MindMeta
 }
 
 
-function readMindsFromDir(baseDir: string, source: 'shared' | 'custom'): MindMetadata[] {
+function readMindsFromDir(baseDir: string, source: 'shared' | 'custom', squad?: string): MindMetadata[] {
   if (!fs.existsSync(baseDir)) return [];
 
   const entries = fs.readdirSync(baseDir, { withFileTypes: true });
@@ -132,7 +132,10 @@ function readMindsFromDir(baseDir: string, source: 'shared' | 'custom'): MindMet
     if (!entry.isDirectory()) continue;
     const mindDir = path.join(baseDir, entry.name);
     const mind = readMindFromDir(mindDir, source);
-    if (mind) minds.push(mind);
+    if (mind) {
+      if (squad) mind.category = squad;
+      minds.push(mind);
+    }
   }
 
   return minds;
@@ -160,8 +163,20 @@ export function readSharedMinds(teamaiRepoPath: string): MindMetadata[] {
   const cached = getCached(cacheKey);
   if (cached) return cached;
 
-  const sharedMindsDir = path.join(teamaiRepoPath, 'squads-base', 'mmos-squad', 'minds');
-  const minds = readMindsFromDir(sharedMindsDir, 'shared');
+  const squadsDir = path.join(teamaiRepoPath, 'squads-base');
+  const minds: MindMetadata[] = [];
+
+  if (fs.existsSync(squadsDir)) {
+    const entries = fs.readdirSync(squadsDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const squadName = entry.name;
+      const squadMindsDir = path.join(squadsDir, squadName, 'minds');
+      const squadMinds = readMindsFromDir(squadMindsDir, 'shared', squadName);
+      minds.push(...squadMinds);
+    }
+  }
+
   setCached(cacheKey, minds);
   return minds;
 }
@@ -193,4 +208,72 @@ export function mergeMinds(shared: MindMetadata[], custom: MindMetadata[]): Mind
   }
 
   return Array.from(merged.values());
+}
+
+
+// SimplePersona é o formato do big-AGI store de personas
+export interface MindAsSimplePersona {
+  id: string;
+  name: string;
+  description: string;
+  systemPrompt: string;
+  creationDate: string;
+  pictureUrl?: string;
+  inputText: string;
+  source: 'mmos-sync';
+}
+
+
+/**
+ * Converte MindMetadata para formato SimplePersona do big-AGI.
+ * Lê o system prompt completo do arquivo em disco.
+ * Retorna null se system prompt não puder ser lido.
+ */
+export function mindToSimplePersona(mind: MindMetadata): MindAsSimplePersona | null {
+  if (!mind.systemPromptPath) return null;
+
+  let systemPrompt: string;
+  try {
+    systemPrompt = fs.readFileSync(mind.systemPromptPath, 'utf-8').trim();
+  } catch {
+    console.warn(`[minds.reader] Falha ao ler system prompt: ${mind.systemPromptPath}`);
+    return null;
+  }
+
+  // Verificar se existe imagem no diretório do mind
+  const mindDir = path.dirname(path.dirname(mind.systemPromptPath));
+  const pictureUrl = findMindPicture(mindDir);
+
+  return {
+    id: `mmos-${mind.id}`,
+    name: mind.name,
+    description: mind.specialty,
+    systemPrompt,
+    creationDate: new Date().toISOString(),
+    pictureUrl: pictureUrl ?? undefined,
+    inputText: `MMOS Mind: ${mind.name} — ${mind.specialty}`,
+    source: 'mmos-sync',
+  };
+}
+
+
+/** Procura por imagem de avatar no diretório do mind. */
+function findMindPicture(mindDir: string): string | null {
+  const imageExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.svg'];
+  const imageNames = ['avatar', 'picture', 'profile', 'icon'];
+
+  try {
+    if (!fs.existsSync(mindDir)) return null;
+    const files = fs.readdirSync(mindDir);
+    for (const name of imageNames) {
+      for (const ext of imageExtensions) {
+        if (files.includes(`${name}${ext}`)) {
+          return `/api/minds/avatar/${path.basename(mindDir)}/${name}${ext}`;
+        }
+      }
+    }
+  } catch {
+    // optional — não falha
+  }
+  return null;
 }

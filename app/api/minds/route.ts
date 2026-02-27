@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { mergeMinds, readSharedMinds, readUserMinds, type MindMetadata } from '~/server/minds/minds.reader';
+import { mergeMinds, mindToSimplePersona, readSharedMinds, readUserMinds, type MindAsSimplePersona, type MindMetadata } from '~/server/minds/minds.reader';
 
 
 // Resolve o username do teamAI a partir do Supabase user_id
@@ -44,7 +44,9 @@ export const dynamic = 'force-dynamic';
 // Dev mode: skip auth when Supabase is not configured
 const SUPABASE_ENABLED = Boolean(process.env['NEXT_PUBLIC_SUPABASE_URL']);
 
-export async function GET(request: NextRequest): Promise<NextResponse<{ minds: MindMetadata[] } | { error: string; message: string }>> {
+type MindsResponse = { minds: MindMetadata[] } | { personas: MindAsSimplePersona[] } | { error: string; message: string };
+
+export async function GET(request: NextRequest): Promise<NextResponse<MindsResponse>> {
   // Auth: skip in dev mode when Supabase is not configured
   let userId: string | null = null;
   if (SUPABASE_ENABLED) {
@@ -59,6 +61,10 @@ export async function GET(request: NextRequest): Promise<NextResponse<{ minds: M
     userId = 'dev-user';
   }
 
+  // ?format=persona retorna no formato SimplePersona do big-AGI
+  const format = request.nextUrl.searchParams.get('format');
+  const returnAsPersona = format === 'persona';
+
   // Path base do repo teamAI (este próprio repo em desenvolvimento)
   const teamaiRepoPath = process.env['TEAMAI_REPO_PATH'] ?? process.cwd();
 
@@ -72,6 +78,13 @@ export async function GET(request: NextRequest): Promise<NextResponse<{ minds: M
 
     // Combinar (custom sobrescreve shared)
     const minds = mergeMinds(sharedMinds, userMinds);
+
+    if (returnAsPersona) {
+      const personas = minds
+        .map(m => mindToSimplePersona(m))
+        .filter((p): p is MindAsSimplePersona => p !== null);
+      return NextResponse.json({ personas }, { status: 200 });
+    }
 
     return NextResponse.json({ minds }, { status: 200 });
 

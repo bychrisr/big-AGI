@@ -72,6 +72,8 @@ export async function POST(request: NextRequest): Promise<Response> {
   const mindsPath = path.join(teamaiRepoPath, 'squads-base', 'mmos-squad', 'minds');
 
   const anthropicApiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
+  const supabaseUrl = process.env['NEXT_PUBLIC_SUPABASE_URL'] ?? '';
+  const supabaseServiceRoleKey = process.env['SUPABASE_SERVICE_ROLE_KEY'] ?? '';
   const modelArg = body.model ? `, model='${body.model}'` : '';
   const maxTokensArg = body.max_tokens ? `max_tokens=${body.max_tokens},` : '';
 
@@ -84,6 +86,9 @@ export async function POST(request: NextRequest): Promise<Response> {
           enginePath,
           mindsPath,
           anthropicApiKey,
+          supabaseUrl,
+          supabaseServiceRoleKey,
+          userId,
           modelArg,
           maxTokensArg,
           topic: body.topic,
@@ -139,6 +144,9 @@ interface PythonScriptParams {
   enginePath: string;
   mindsPath: string;
   anthropicApiKey: string;
+  supabaseUrl: string;
+  supabaseServiceRoleKey: string;
+  userId: string;
   modelArg: string;
   maxTokensArg: string;
   topic: string;
@@ -147,25 +155,56 @@ interface PythonScriptParams {
 }
 
 function buildPythonScript(params: PythonScriptParams): string {
-  const { enginePath, mindsPath, anthropicApiKey, modelArg, maxTokensArg, topic, minds, userMessage } =
-    params;
+  const {
+    enginePath,
+    mindsPath,
+    anthropicApiKey,
+    supabaseUrl,
+    supabaseServiceRoleKey,
+    userId,
+    modelArg,
+    maxTokensArg,
+    topic,
+    minds,
+    userMessage,
+  } = params;
+  const scriptsPath = `${enginePath}/scripts`;
   return `
 import sys, json, os
 sys.path.insert(0, '${enginePath}')
+sys.path.insert(0, '${scriptsPath}')
 os.environ.setdefault('ANTHROPIC_API_KEY', '${anthropicApiKey}')
 
 from debate_engine.engine import DebateEngine
 from debate_engine.mind_loader import MindLoader
+from memory_command_detector import detect_memory_command, format_confirmation
 
 api_key = os.environ.get('ANTHROPIC_API_KEY', '')
 if not api_key:
     print(json.dumps({'type': 'error', 'mind_slug': '', 'error': 'ANTHROPIC_API_KEY not configured'}))
     sys.exit(1)
 
+user_message = ${JSON.stringify(userMessage)}
+
+# Detectar comando de memoria antes de executar o debate
+memory_cmd = detect_memory_command(user_message)
+if memory_cmd.detected and memory_cmd.key and ${JSON.stringify(supabaseUrl !== '' && supabaseServiceRoleKey !== '')}:
+    try:
+        from supabase import create_client
+        from memory_store import MemoryStore
+        sb = create_client('${supabaseUrl}', '${supabaseServiceRoleKey}')
+        ms = MemoryStore(sb)
+        ms.record_explicit('${userId}', memory_cmd.key, memory_cmd.value, source='explicit')
+        confirmation = format_confirmation(memory_cmd.key, memory_cmd.value)
+        print(json.dumps({'type': 'text', 'mind_slug': 'memory', 'content': confirmation}))
+    except Exception as e:
+        print(json.dumps({'type': 'error', 'mind_slug': 'memory', 'error': f'Erro ao gravar memoria: {e}'}))
+    print(json.dumps({'type': 'done', 'mind_slug': ''}))
+    sys.exit(0)
+
 engine = DebateEngine(api_key=api_key${modelArg})
 loader = MindLoader('${mindsPath}')
 topic = ${JSON.stringify(topic)}
-user_message = ${JSON.stringify(userMessage)}
 
 for mind_slug in ${JSON.stringify(minds)}:
     if not loader.mind_exists(mind_slug):
