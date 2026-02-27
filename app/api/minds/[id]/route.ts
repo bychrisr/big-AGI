@@ -2,45 +2,34 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { createSupabaseServerClient } from '~/common/supabase/server';
 import { mergeMinds, readSharedMinds, readUserMinds, type MindMetadata } from '~/server/minds/minds.reader';
-
-
-// Resolve o username do teamAI a partir do Supabase user_id
-function resolveUsername(userId: string): string | null {
-  // Dev mode: use TEAMAI_DEV_USERNAME environment variable
-  if (!Boolean(process.env['NEXT_PUBLIC_SUPABASE_URL'])) {
-    return process.env['TEAMAI_DEV_USERNAME'] ?? null;
-  }
-  // TODO(Story 3.1): buscar do Supabase com JOIN users.profiles
-  const STATIC_MAP: Record<string, string> = {};
-  return STATIC_MAP[userId] ?? null;
-}
-
-
-// Extrai user_id do Authorization header (Bearer token Supabase JWT)
-async function extractUserId(request: NextRequest): Promise<string | null> {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
-
-  const token = authHeader.slice(7);
-
-  try {
-    const [, payloadB64] = token.split('.');
-    if (!payloadB64) return null;
-    const payload = JSON.parse(
-      Buffer.from(payloadB64, 'base64url').toString('utf-8'),
-    ) as Record<string, unknown>;
-    return typeof payload['sub'] === 'string' ? payload['sub'] : null;
-  } catch {
-    return null;
-  }
-}
 
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const SUPABASE_ENABLED = Boolean(process.env['NEXT_PUBLIC_SUPABASE_URL']);
+
+
+/** Resolves teamAI username. Dev mode uses TEAMAI_DEV_USERNAME, prod queries user_preferences. */
+async function resolveUsername(userId: string): Promise<string | null> {
+  if (!SUPABASE_ENABLED) {
+    return process.env['TEAMAI_DEV_USERNAME'] ?? null;
+  }
+
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data } = await supabase
+      .from('user_preferences')
+      .select('username')
+      .eq('user_id', userId)
+      .single();
+    return data?.username ?? null;
+  } catch {
+    return null;
+  }
+}
 
 
 interface MindDetailResponse {
@@ -55,19 +44,21 @@ interface ErrorResponse {
 
 
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse<MindDetailResponse | ErrorResponse>> {
-  // Auth: skip in dev mode
   let userId: string | null = null;
+
   if (SUPABASE_ENABLED) {
-    userId = await extractUserId(request);
-    if (!userId) {
+    const supabase = await createSupabaseServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
       return NextResponse.json(
-        { error: 'Unauthorized', message: 'Bearer token required' },
+        { error: 'Unauthorized', message: 'Login required' },
         { status: 401 },
       );
     }
+    userId = user.id;
   } else {
     userId = 'dev-user';
   }
@@ -84,7 +75,7 @@ export async function GET(
 
   try {
     const sharedMinds = readSharedMinds(teamaiRepoPath);
-    const username = resolveUsername(userId);
+    const username = await resolveUsername(userId);
     const userMinds = username ? readUserMinds(teamaiRepoPath, username) : [];
     const allMinds = mergeMinds(sharedMinds, userMinds);
 
@@ -96,7 +87,6 @@ export async function GET(
       );
     }
 
-    // Read system prompt content if path is available
     let systemPromptContent: string | undefined;
     if (mind.systemPromptPath) {
       const resolvedPath = path.isAbsolute(mind.systemPromptPath)
