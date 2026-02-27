@@ -10,6 +10,7 @@ interface DebateRequest {
   minds: string[];
   user_message: string;
   session_id?: string;
+  project_name?: string;
   model?: string;
   max_tokens?: number;
 }
@@ -94,6 +95,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           topic: body.topic,
           minds: body.minds,
           userMessage: body.user_message,
+          projectName: body.project_name ?? '',
         }),
       ]);
 
@@ -152,6 +154,7 @@ interface PythonScriptParams {
   topic: string;
   minds: string[];
   userMessage: string;
+  projectName: string;
 }
 
 function buildPythonScript(params: PythonScriptParams): string {
@@ -167,10 +170,12 @@ function buildPythonScript(params: PythonScriptParams): string {
     topic,
     minds,
     userMessage,
+    projectName,
   } = params;
   const scriptsPath = `${enginePath}/scripts`;
+  const hasSupabase = supabaseUrl !== '' && supabaseServiceRoleKey !== '';
   return `
-import sys, json, os
+import sys, json, os, uuid
 sys.path.insert(0, '${enginePath}')
 sys.path.insert(0, '${scriptsPath}')
 os.environ.setdefault('ANTHROPIC_API_KEY', '${anthropicApiKey}')
@@ -185,10 +190,11 @@ if not api_key:
     sys.exit(1)
 
 user_message = ${JSON.stringify(userMessage)}
+project_name = ${JSON.stringify(projectName)}
 
 # Detectar comando de memoria antes de executar o debate
 memory_cmd = detect_memory_command(user_message)
-if memory_cmd.detected and memory_cmd.key and ${JSON.stringify(supabaseUrl !== '' && supabaseServiceRoleKey !== '')}:
+if memory_cmd.detected and memory_cmd.key and ${JSON.stringify(hasSupabase)}:
     try:
         from supabase import create_client
         from memory_store import MemoryStore
@@ -206,6 +212,10 @@ engine = DebateEngine(api_key=api_key${modelArg})
 loader = MindLoader('${mindsPath}')
 topic = ${JSON.stringify(topic)}
 
+turns = []
+total_input = 0
+total_output = 0
+
 for mind_slug in ${JSON.stringify(minds)}:
     if not loader.mind_exists(mind_slug):
         print(json.dumps({'type': 'error', 'mind_slug': mind_slug, 'error': f'Mind not found: {mind_slug}'}))
@@ -222,8 +232,35 @@ for mind_slug in ${JSON.stringify(minds)}:
         )
         print(json.dumps({'type': 'text', 'mind_slug': mind_slug, 'content': result.content}))
         print(json.dumps({'type': 'token_usage', 'mind_slug': mind_slug, 'input_tokens': result.input_tokens, 'output_tokens': result.output_tokens}))
+        turns.append({'mind_slug': mind_slug, 'content': result.content})
+        total_input += result.input_tokens
+        total_output += result.output_tokens
     except Exception as e:
         print(json.dumps({'type': 'error', 'mind_slug': mind_slug, 'error': str(e)}))
+
+# Salvar sessão de debate no Supabase para memória futura
+if turns and ${JSON.stringify(hasSupabase)}:
+    try:
+        from supabase import create_client
+        sb = create_client('${supabaseUrl}', '${supabaseServiceRoleKey}')
+        session_id = str(uuid.uuid4())
+        sb.table('debate_sessions').insert({
+            'session_id': session_id,
+            'user_id': '${userId}',
+            'topic': topic,
+            'minds': ${JSON.stringify(minds)},
+            'turns': turns,
+            'token_usage': {
+                'input': total_input,
+                'output': total_output,
+                'total': total_input + total_output,
+                'turns': len(turns),
+                'project': project_name,
+            },
+        }).execute()
+    except Exception as e:
+        # Silent — nao bloquear o streaming
+        sys.stderr.write(f'[debate] Session save failed: {e}\\n')
 
 print(json.dumps({'type': 'done', 'mind_slug': ''}))
 `;

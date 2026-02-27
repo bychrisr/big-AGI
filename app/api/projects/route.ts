@@ -6,8 +6,12 @@ import { createSupabaseServerClient } from '~/common/supabase/server';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const SUPABASE_ENABLED = Boolean(process.env['NEXT_PUBLIC_SUPABASE_URL']);
+
 
 export async function GET(_request: NextRequest): Promise<NextResponse> {
+  if (!SUPABASE_ENABLED) return NextResponse.json({ projects: [] });
+
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -25,6 +29,8 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
 
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  if (!SUPABASE_ENABLED) return NextResponse.json({ success: true, dev: true });
+
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

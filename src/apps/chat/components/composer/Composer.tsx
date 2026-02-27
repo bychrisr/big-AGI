@@ -57,6 +57,7 @@ import type { AttachmentDraftId } from '~/common/attachment-drafts/attachment.ty
 import { LLMAttachmentDraftsAction, LLMAttachmentsList } from './llmattachments/LLMAttachmentsList';
 import { PhPaintBrush } from '~/common/components/icons/phosphor/PhPaintBrush';
 import { useAttachmentDrafts } from '~/common/attachment-drafts/useAttachmentDrafts';
+import { detectAndSaveMemory } from '~/modules/teamai/detectAndSaveMemory';
 import { useLLMAttachmentDrafts } from './llmattachments/useLLMAttachmentDrafts';
 
 import type { ChatExecuteMode } from '../../execute-mode/execute-mode.types';
@@ -330,12 +331,15 @@ export function Composer(props: {
     // prepare the metadata
     const metadata = inReferenceTo?.length ? { inReferenceTo: inReferenceTo } : undefined;
 
+    // MMOS memory command detection: fire-and-forget before sending
+    void detectAndSaveMemory(composerText, systemPurposeId);
+
     // send the message - NOTE: if successful, the ownership of the fragments is transferred to the receiver, so we just clear them
     const enqueued = onAction(targetConversationId, _chatExecuteMode, fragments, metadata);
     if (enqueued)
       _handleClearText();
     return enqueued;
-  }, [targetConversationId, confirmProceedIfAttachmentsNotSupported, composerTextSuffix, props.capabilityHasT2IEdit, inReferenceTo, onAction, _handleClearText, attachmentsTakeAllFragments]);
+  }, [targetConversationId, confirmProceedIfAttachmentsNotSupported, composerTextSuffix, props.capabilityHasT2IEdit, inReferenceTo, onAction, _handleClearText, attachmentsTakeAllFragments, systemPurposeId]);
 
   const handleSendAction = React.useCallback(async (chatExecuteMode: ChatExecuteMode, composerText: string): Promise<boolean> => {
     setSendStarted(true);
