@@ -108,3 +108,51 @@ export async function fetchMindSystemPrompt(mindId: string): Promise<string | nu
     return null;
   }
 }
+
+
+/**
+ * Fetches user memories + recent debate sessions and builds a context block
+ * to be appended to any mind's system prompt.
+ * This is the "Memory Layer" that Steave and all minds reference.
+ */
+export async function buildMemoryContextBlock(activeFolderTitle?: string): Promise<string> {
+  const parts: string[] = [];
+
+  // 1. User memories
+  try {
+    const memRes = await fetch('/api/memory');
+    if (memRes.ok) {
+      const memData = await memRes.json() as { memories?: Array<{ key: string; value: string; confidence: number }> };
+      const memories = (memData.memories ?? []).filter(m => m.confidence >= 0.5);
+      if (memories.length > 0) {
+        parts.push('## Memórias do Usuário\n' + memories.map(m => `- **${m.key}**: ${m.value}`).join('\n'));
+      }
+    }
+  } catch { /* silent */ }
+
+  // 2. Recent debate sessions for active project
+  if (activeFolderTitle) {
+    try {
+      const debateRes = await fetch(`/api/debates?project=${encodeURIComponent(activeFolderTitle.toLowerCase())}`);
+      if (debateRes.ok) {
+        const debateData = await debateRes.json() as {
+          sessions?: Array<{ topic: string; created_at: string; minds: string[]; token_usage: { turns?: number } | null }>
+        };
+        const sessions = debateData.sessions ?? [];
+        if (sessions.length > 0) {
+          const sessionLines = sessions.slice(0, 5).map(s => {
+            const date = new Date(s.created_at).toLocaleDateString('pt-BR');
+            const turns = s.token_usage?.turns ?? 0;
+            const minds = s.minds.slice(0, 3).map(m => m.split('_')[0]).join(', ');
+            const topic = (s.topic.split(' — ')[0] ?? s.topic).slice(0, 60);
+            return `- ${date} | "${topic}" | ${turns} turnos | ${minds}`;
+          });
+          parts.push(`## Debates Recentes — Projeto ${activeFolderTitle}\n` + sessionLines.join('\n'));
+        }
+      }
+    } catch { /* silent */ }
+  }
+
+  if (parts.length === 0) return '';
+  return '\n\n---\n## 🧬 Memory Layer Inicializada\n\n' + parts.join('\n\n') + '\n\n---';
+}

@@ -12,7 +12,7 @@ import TelegramIcon from '@mui/icons-material/Telegram';
 
 import { SystemPurposeData, SystemPurposeExample, SystemPurposeId, SystemPurposes } from '../../../../data';
 
-import { fetchMindSystemPrompt, registeredMindIds, useMindsStore } from '~/modules/teamai/store-minds';
+import { buildMemoryContextBlock, fetchMindSystemPrompt, registeredMindIds, useMindsStore } from '~/modules/teamai/store-minds';
 import type { MindMetadata } from '~/modules/teamai/store-minds';
 import { YouTubeURLInput } from '~/modules/youtube/YouTubeURLInput';
 import { bareBonesPromptMixer } from '~/modules/persona/pmix/pmix';
@@ -20,6 +20,7 @@ import { bareBonesPromptMixer } from '~/modules/persona/pmix/pmix';
 import type { DConversationId } from '~/common/stores/chat/chat.conversation';
 import { ExpanderControlledBox } from '~/common/components/ExpanderControlledBox';
 import { createDMessageTextContent } from '~/common/stores/chat/chat.message';
+import { useFolderStore } from '~/common/stores/folders/store-chat-folders';
 import { lineHeightTextareaMd } from '~/common/app.theme';
 import { navigateToPersonas } from '~/common/app.routes';
 import { useChatStore } from '~/common/stores/chat/store-chats';
@@ -271,7 +272,7 @@ export function PersonaSelector(props: {
 
   const toggleEditMode = React.useCallback(() => setEditMode(on => !on), []);
 
-  // MMOS mind handler: fetch full system prompt then activate as custom persona
+  // MMOS mind handler: fetch full system prompt + inject memory context, then activate
   const handleMindSelected = React.useCallback(async (mindId: string) => {
     if (!setSystemPurposeId) return;
 
@@ -282,11 +283,20 @@ export function PersonaSelector(props: {
 
     // Fetch full system prompt in background and update
     setLoadingMindId(mindId);
-    const fullPrompt = await fetchMindSystemPrompt(mindId);
+    const [fullPrompt, memoryBlock] = await Promise.all([
+      fetchMindSystemPrompt(mindId),
+      // Find active project folder for this conversation to inject debate context
+      (async () => {
+        const folders = useFolderStore.getState().folders;
+        const activeFolder = folders.find(f => f.conversationIds.includes(props.conversationId));
+        return buildMemoryContextBlock(activeFolder?.title);
+      })(),
+    ]);
     setLoadingMindId(null);
 
     if (fullPrompt && SystemPurposes[mindId]) {
-      SystemPurposes[mindId]!.systemMessage = fullPrompt;
+      // Append memory layer context (memories + recent debates) to system prompt
+      SystemPurposes[mindId]!.systemMessage = fullPrompt + memoryBlock;
     }
 
     setSystemPurposeId(props.conversationId, mindId);
