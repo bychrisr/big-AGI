@@ -1,0 +1,293 @@
+workflow:
+  id: kaven-sprint-cycle
+  name: Sprint Development Cycle
+  description: |
+    Standard sprint development cycle for implementing a story in Kaven.
+    Follows the mandatory development flow: branch -> implement -> test -> PR -> merge.
+    Integrates with AIOS story-driven development.
+  version: "1.0.0"
+  tags: [sprint, development, story, agile]
+
+  inputs:
+    - name: story_id
+      type: string
+      required: true
+      description: Story identifier (e.g., STORY-015)
+    - name: story_file
+      type: string
+      required: true
+      description: Path to story file (e.g., docs/planning/stories/sprint-3/STORY-015.md)
+    - name: sprint_number
+      type: number
+      required: true
+      description: Current sprint number
+    - name: estimated_hours
+      type: number
+      required: false
+      description: Estimated effort in hours
+    - name: branch_prefix
+      type: enum
+      values: [feat, fix, chore, docs]
+      default: feat
+      description: Git branch prefix
+
+  sequence:
+    - id: story-review
+      name: Review Story & Plan
+      agent: kaven-architect
+      description: |
+        Read and understand the story completely:
+        - Parse acceptance criteria
+        - Identify technical requirements
+        - List affected files and models
+        - Estimate complexity
+        - Identify dependencies on other stories
+      actions:
+        - read_file: "{{story_file}}"
+        - extract_criteria: true
+        - identify_dependencies: true
+        - estimate_complexity: true
+      outputs:
+        - acceptance_criteria
+        - technical_requirements
+        - file_list
+        - complexity_estimate
+        - blocked_by
+
+    - id: setup-branch
+      name: Setup Git Branch
+      agent: kaven-devops
+      depends_on: [story-review]
+      description: |
+        Create feature branch following naming convention:
+        1. Checkout main and pull latest
+        2. Create feature branch
+        3. Verify clean working directory
+      actions:
+        - run: git checkout main
+        - run: git pull origin main
+        - run: "git checkout -b {{branch_prefix}}/{{story_id | lowercase}}-{{story_title | kebab-case}}"
+        - run: git status
+      outputs:
+        - branch_name
+
+    - id: architecture-planning
+      name: Architecture Planning
+      agent: kaven-architect
+      depends_on: [setup-branch]
+      description: |
+        Plan implementation approach:
+        - Review existing patterns in codebase
+        - Determine if new models are needed
+        - Plan API endpoints
+        - Plan frontend changes
+        - Identify reusable components
+      actions:
+        - review_codebase: "{{file_list}}"
+        - check_existing_patterns: true
+        - plan_implementation: true
+      outputs:
+        - implementation_plan
+        - new_files
+        - modified_files
+
+    - id: implementation
+      name: Feature Implementation
+      agent: kaven-api-dev
+      depends_on: [architecture-planning]
+      description: |
+        Implement the feature following the plan:
+        - Schema changes (if needed)
+        - Backend services and controllers
+        - Frontend pages and components
+        - Validation schemas
+        - Follow all Kaven patterns (RLS, soft delete, etc.)
+      actions:
+        - implement: "{{implementation_plan}}"
+        - follow_patterns: [rls, soft-delete, feature-flags, idor]
+        - update_story_checkboxes: true
+      outputs:
+        - implemented_files
+        - remaining_criteria
+
+    - id: frontend-implementation
+      name: Frontend Implementation
+      agent: kaven-frontend-dev
+      depends_on: [implementation]
+      condition: "{{has_frontend_changes}}"
+      description: |
+        Implement frontend changes:
+        - Pages using App Router conventions
+        - Components from @kaven/ui
+        - API client integration
+        - i18n translations
+        - Navigation updates
+      actions:
+        - implement_frontend: "{{implementation_plan}}"
+        - reuse_ui_components: true
+        - add_translations: true
+      outputs:
+        - frontend_files
+
+    - id: testing
+      name: Write & Run Tests
+      agent: kaven-qa
+      depends_on: [implementation, frontend-implementation]
+      description: |
+        Write comprehensive tests and run full suite:
+        - Unit tests for new services
+        - Integration tests for new endpoints
+        - Multi-tenant isolation tests
+        - IDOR protection tests
+        - Verify existing tests still pass
+      actions:
+        - write_tests: "{{implemented_files}}"
+        - run: pnpm test
+        - check_coverage: { lines: 80, functions: 80, branches: 75 }
+      outputs:
+        - test_files
+        - test_results
+        - coverage_report
+
+    - id: security-validation
+      name: Security Validation
+      agent: kaven-qa
+      depends_on: [testing]
+      description: |
+        Run security-specific tests:
+        - Security test suite
+        - GDPR compliance tests
+        - Verify middleware stack on new endpoints
+      actions:
+        - run: pnpm test:security
+        - run: pnpm test:gdpr
+        - verify_middleware: "{{new_endpoints}}"
+      outputs:
+        - security_results
+
+    - id: ci-verification
+      name: CI Pipeline Verification
+      agent: kaven-devops
+      depends_on: [security-validation]
+      description: |
+        Run complete CI pipeline locally before PR:
+        - Lint check
+        - TypeScript strict compilation
+        - Full test suite
+        - Build verification
+      actions:
+        - run: pnpm lint
+        - run: pnpm typecheck
+        - run: pnpm test
+        - run: pnpm build
+      outputs:
+        - ci_status
+        - lint_results
+        - typecheck_results
+
+    - id: commit-changes
+      name: Commit Changes
+      agent: kaven-devops
+      depends_on: [ci-verification]
+      description: |
+        Create atomic commits with conventional commit messages:
+        - Stage changed files
+        - Write descriptive commit message
+        - Reference story ID in commit
+      actions:
+        - run: git add -A
+        - run: "git commit -m '{{branch_prefix}}: {{commit_message}} [{{story_id}}]'"
+        - run: "git push -u origin {{branch_name}}"
+      outputs:
+        - commit_sha
+
+    - id: create-pr
+      name: Create Pull Request
+      agent: kaven-devops
+      depends_on: [commit-changes]
+      description: |
+        Create PR with evidence bundle:
+        - PR title with story reference
+        - Description with changes summary
+        - Evidence: test results, coverage, security
+        - Checklist of acceptance criteria
+      actions:
+        - run: |
+            gh pr create \
+              --title "{{branch_prefix}}: {{story_title}} [{{story_id}}]" \
+              --body "$(cat <<'EOF'
+            ## {{story_id}}: {{story_title}}
+
+            ### Changes
+            {{changes_summary}}
+
+            ### Acceptance Criteria
+            {{acceptance_criteria_checklist}}
+
+            ### Evidence
+            - Test results: {{test_results_summary}}
+            - Coverage: {{coverage_summary}}
+            - Security: {{security_results_summary}}
+            - CI: {{ci_status}}
+
+            ### Files Changed
+            {{file_list}}
+            EOF
+            )"
+      outputs:
+        - pr_url
+        - pr_number
+
+    - id: update-story
+      name: Update Story Status
+      agent: kaven-architect
+      depends_on: [create-pr]
+      description: |
+        Update the story file:
+        - Mark all checkboxes as complete
+        - Add PR reference
+        - Update file list
+        - Set status to "In Review"
+      actions:
+        - update_story: "{{story_file}}"
+        - mark_complete: all
+        - add_pr_reference: "{{pr_url}}"
+      outputs:
+        - story_status
+
+    - id: post-merge
+      name: Post-Merge Cleanup
+      agent: kaven-devops
+      depends_on: [update-story]
+      description: |
+        After PR approval and merge:
+        1. Checkout main
+        2. Pull latest
+        3. Delete feature branch
+        4. Verify deployment (if applicable)
+      actions:
+        - run: git checkout main
+        - run: git pull origin main
+        - run: "git branch -d {{branch_name}}"
+        - run: "git push origin --delete {{branch_name}}"
+      outputs:
+        - cleanup_status
+
+  completion:
+    evidence_bundle:
+      - git_diff: true
+      - test_results: true
+      - coverage_report: true
+      - security_results: true
+      - ci_report: true
+      - pr_url: true
+    story_update:
+      status: "Done"
+      pr: "{{pr_url}}"
+      branch: "{{branch_name}}"
+      commit: "{{commit_sha}}"
+    handoff_note: |
+      Story {{story_id}} completed and merged.
+      PR: {{pr_url}}
+      All acceptance criteria verified.
+      Next story ready for pickup.

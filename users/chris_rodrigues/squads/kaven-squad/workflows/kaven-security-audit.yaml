@@ -1,0 +1,199 @@
+workflow:
+  id: kaven-security-audit
+  name: Security Audit
+  description: |
+    Comprehensive security audit workflow for the Kaven Framework.
+    Covers architecture review, automated security tests, GDPR compliance,
+    multi-tenant isolation, and generates a detailed audit report.
+  version: "1.0.0"
+  tags: [security, audit, compliance, gdpr]
+
+  inputs:
+    - name: scope
+      type: enum
+      values: [full, api-only, frontend-only, specific-module]
+      default: full
+      description: Scope of the security audit
+    - name: module_name
+      type: string
+      required: false
+      description: Module to audit (when scope is specific-module)
+    - name: include_gdpr
+      type: boolean
+      default: true
+      description: Include GDPR compliance checks
+    - name: include_penetration
+      type: boolean
+      default: false
+      description: Include manual penetration testing steps
+
+  sequence:
+    - id: architecture-review
+      name: Security Architecture Review
+      agent: kaven-architect
+      description: |
+        Review the 10-layer middleware stack configuration:
+        - Verify all layers are properly registered
+        - Check bypass rules are intentional
+        - Verify CORS origins are restrictive
+        - Check rate limit configuration
+        - Review JWT token expiry settings
+        - Verify Helmet headers
+      actions:
+        - read_file: apps/api/src/index.ts
+        - read_file: apps/api/src/plugins/cors.ts
+        - read_file: apps/api/src/plugins/helmet.ts
+        - read_file: apps/api/src/plugins/rate-limit.ts
+        - read_file: apps/api/src/middleware/auth.middleware.ts
+        - read_file: apps/api/src/middleware/csrf.middleware.ts
+        - verify_middleware_order: true
+        - check_bypass_rules: true
+      outputs:
+        - architecture_findings
+        - middleware_status
+
+    - id: run-security-tests
+      name: Run Automated Security Tests
+      agent: kaven-qa
+      depends_on: [architecture-review]
+      description: |
+        Execute all security test suites:
+        - IDOR: Test resource ownership verification across all endpoints
+        - CSRF: Test origin/referer validation on state-changing requests
+        - SQL Injection: Test parameterized query enforcement
+        - XSS: Test input sanitization and output encoding
+      actions:
+        - run: pnpm test:security
+        - capture_output: security_test_results
+        - analyze_failures: true
+      outputs:
+        - security_test_results
+        - idor_findings
+        - csrf_findings
+        - sqli_findings
+        - xss_findings
+
+    - id: run-gdpr-tests
+      name: Run GDPR Compliance Tests
+      agent: kaven-qa
+      depends_on: [architecture-review]
+      condition: "{{include_gdpr}}"
+      description: |
+        Execute GDPR compliance test suites:
+        - Right to erasure (data deletion on request)
+        - Right to access (data export on request)
+        - Right to portability (machine-readable export)
+        - Consent management (opt-in/opt-out tracking)
+        - Data minimization (no unnecessary data collection)
+      actions:
+        - run: pnpm test:gdpr
+        - capture_output: gdpr_test_results
+        - analyze_compliance: true
+      outputs:
+        - gdpr_test_results
+        - compliance_status
+
+    - id: multi-tenant-isolation
+      name: Multi-Tenant Isolation Audit
+      agent: kaven-qa
+      depends_on: [run-security-tests]
+      description: |
+        Verify tenant isolation at all levels:
+        - RLS middleware is applied to all tenant-scoped models
+        - No direct Prisma queries bypass RLS
+        - Cross-tenant data access is impossible
+        - Tenant context is always set before DB access
+        - Soft delete respects tenant boundaries
+      actions:
+        - search_codebase:
+            pattern: "prisma\\.(findMany|findFirst|findUnique|create|update|delete)"
+            exclude: ["*.test.ts", "node_modules"]
+        - verify_rls_coverage: true
+        - test_cross_tenant_access: true
+        - verify_tenant_context_propagation: true
+      outputs:
+        - isolation_findings
+        - unprotected_queries
+
+    - id: auth-audit
+      name: Authentication & Authorization Audit
+      agent: kaven-qa
+      depends_on: [run-security-tests]
+      description: |
+        Audit authentication and authorization:
+        - JWT configuration (algorithm, expiry, secret strength)
+        - Refresh token rotation is enforced
+        - Password hashing (bcrypt rounds)
+        - 2FA implementation
+        - Role hierarchy enforcement
+        - Grant/capability enforcement
+      actions:
+        - check_jwt_config: true
+        - check_password_hashing: true
+        - check_2fa_implementation: true
+        - check_role_enforcement: true
+        - check_session_management: true
+      outputs:
+        - auth_findings
+
+    - id: dependency-audit
+      name: Dependency Vulnerability Scan
+      agent: kaven-devops
+      depends_on: []
+      description: |
+        Scan dependencies for known vulnerabilities:
+        - npm audit
+        - Check for outdated packages
+        - Review transitive dependencies
+      actions:
+        - run: pnpm audit --audit-level=moderate
+        - run: pnpm outdated
+        - analyze_vulnerabilities: true
+      outputs:
+        - dependency_findings
+        - vulnerability_count
+
+    - id: generate-report
+      name: Generate Security Audit Report
+      agent: kaven-architect
+      depends_on:
+        - architecture-review
+        - run-security-tests
+        - run-gdpr-tests
+        - multi-tenant-isolation
+        - auth-audit
+        - dependency-audit
+      description: |
+        Compile findings into a comprehensive security audit report:
+        - Executive summary
+        - Findings by severity (Critical, High, Medium, Low, Info)
+        - Remediation recommendations
+        - Compliance status (GDPR, multi-tenancy)
+        - Test coverage metrics
+        - Dependency status
+      actions:
+        - compile_report:
+            inputs:
+              - architecture_findings
+              - security_test_results
+              - gdpr_test_results
+              - isolation_findings
+              - auth_findings
+              - dependency_findings
+            output: "docs/security/audit-report-{{date}}.md"
+      outputs:
+        - audit_report
+        - severity_summary
+
+  completion:
+    evidence_bundle:
+      - audit_report: true
+      - test_results: true
+      - dependency_scan: true
+    report_format: markdown
+    severity_levels:
+      critical: "Immediate action required — data breach risk"
+      high: "Action required within 24h — security gap"
+      medium: "Action required within 1 week — hardening needed"
+      low: "Action required within 1 month — improvement"
+      info: "Informational — best practice suggestion"

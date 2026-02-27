@@ -109,9 +109,13 @@ export const env = createEnv({
     ELEVENLABS_VOICE_ID: z.string().optional(),
 
 
-    // Backend: HTTP Basic Authentication
-    HTTP_BASIC_AUTH_USERNAME: z.string().optional(),
-    HTTP_BASIC_AUTH_PASSWORD: z.string().optional(),
+    // teamAI: Encryption secret for API keys stored in Supabase
+    // Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+    // Minimum 32 characters. Required when Supabase is configured.
+    ENCRYPTION_SECRET: z.string().min(32).optional(),
+
+    // teamAI: Supabase service role key (bypasses RLS for admin operations)
+    SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
 
     // AIX: Strict parsing mode - if omitted: strict in dev (throws on unknown API values), tolerant in prod (warns)
     // Set to 'true' to force strict mode in production (useful for debugging API drift)
@@ -141,6 +145,10 @@ export const env = createEnv({
     // Frontend: server to use for PlantUML rendering
     NEXT_PUBLIC_PLANTUML_SERVER_URL: z.url().optional(),
 
+    // Supabase Auth: project URL and anonymous key (teamAI)
+    NEXT_PUBLIC_SUPABASE_URL: z.url().optional(),
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().optional(),
+
   },
 
   // matches user expectations - see https://github.com/enricoros/big-AGI/issues/279
@@ -151,6 +159,8 @@ export const env = createEnv({
     NEXT_PUBLIC_GA4_MEASUREMENT_ID: process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID,
     NEXT_PUBLIC_GOOGLE_DRIVE_CLIENT_ID: process.env.NEXT_PUBLIC_GOOGLE_DRIVE_CLIENT_ID,
     NEXT_PUBLIC_PLANTUML_SERVER_URL: process.env.NEXT_PUBLIC_PLANTUML_SERVER_URL,
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   },
 });
 

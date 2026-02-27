@@ -1,0 +1,221 @@
+workflow:
+  id: kaven-new-feature
+  name: Add New Feature to Kaven
+  description: |
+    End-to-end workflow for implementing a new feature in the Kaven Framework.
+    Covers architecture review, schema design, API endpoints, frontend pages,
+    testing, security validation, and CI verification.
+  version: "1.0.0"
+  tags: [feature, development, full-stack]
+
+  inputs:
+    - name: feature_name
+      type: string
+      required: true
+      description: Name of the feature to implement
+    - name: story_id
+      type: string
+      required: true
+      description: Story ID (e.g., STORY-015)
+    - name: story_file
+      type: string
+      required: true
+      description: Path to story file in docs/stories/
+    - name: priority
+      type: enum
+      values: [P0, P1, P2]
+      default: P1
+      description: Feature priority level
+
+  sequence:
+    - id: read-story
+      name: Read & Understand Story
+      agent: kaven-architect
+      description: Read the story file, understand acceptance criteria and scope
+      actions:
+        - read_file: "{{story_file}}"
+        - extract: acceptance_criteria, technical_requirements, affected_files
+      outputs:
+        - acceptance_criteria
+        - technical_plan
+
+    - id: architecture-review
+      name: Architecture Review
+      agent: kaven-architect
+      task: kaven-architect-review-feature
+      depends_on: [read-story]
+      description: |
+        Review feature against Kaven architecture patterns:
+        - Multi-tenancy impact (tenantId on new models?)
+        - Middleware stack requirements (new guards needed?)
+        - Feature flag integration (new capability needed?)
+        - Schema split (base vs extended?)
+      actions:
+        - review_architecture: "{{feature_name}}"
+        - check_patterns: [rls, soft-delete, feature-flags, idor]
+        - propose_design: true
+      outputs:
+        - design_document
+        - affected_models
+        - new_capabilities
+
+    - id: schema-design
+      name: Database Schema Design
+      agent: kaven-db-engineer
+      task: kaven-db-engineer-add-model
+      depends_on: [architecture-review]
+      description: |
+        Design and implement Prisma schema changes:
+        - Add models to schema.extended.prisma
+        - Ensure tenantId on all tenant-scoped models
+        - Add composite indexes (@@index([tenantId, ...]))
+        - Add soft delete (deletedAt) where appropriate
+        - Generate and run migration
+      actions:
+        - read_file: packages/database/prisma/schema.base.prisma
+        - read_file: packages/database/prisma/schema.extended.prisma
+        - design_schema: "{{affected_models}}"
+        - create_migration: true
+        - run: pnpm db:generate
+        - run: pnpm db:migrate
+      outputs:
+        - schema_changes
+        - migration_file
+
+    - id: api-endpoints
+      name: API Endpoint Implementation
+      agent: kaven-api-dev
+      task: kaven-api-dev-add-endpoint
+      depends_on: [schema-design]
+      description: |
+        Implement Fastify API endpoints:
+        - Create service class (business logic)
+        - Create controller (request handling)
+        - Create routes with middleware stack
+        - Add Zod validation schemas in packages/shared
+        - Register plugin in apps/api/src/index.ts
+      actions:
+        - create_service: "apps/api/src/services/{{feature_name}}.service.ts"
+        - create_controller: "apps/api/src/controllers/{{feature_name}}.controller.ts"
+        - create_routes: "apps/api/src/routes/{{feature_name}}.routes.ts"
+        - create_schemas: "packages/shared/src/schemas/{{feature_name}}.schema.ts"
+        - register_plugin: apps/api/src/index.ts
+      outputs:
+        - api_files
+        - endpoint_list
+
+    - id: frontend-pages
+      name: Frontend Page Implementation
+      agent: kaven-frontend-dev
+      task: kaven-frontend-dev-add-page
+      depends_on: [api-endpoints]
+      description: |
+        Implement Next.js pages and components:
+        - Create page in app/(dashboard)/
+        - Use existing @kaven/ui components
+        - Add API client functions
+        - Add navigation items
+        - Implement i18n strings (EN + PT-BR)
+      actions:
+        - create_page: "apps/tenant/app/(dashboard)/{{feature_name}}/page.tsx"
+        - create_components: "apps/tenant/components/{{feature_name}}/"
+        - update_navigation: true
+        - add_translations: [en, pt-BR]
+      outputs:
+        - frontend_files
+        - component_list
+
+    - id: tests
+      name: Test Implementation
+      agent: kaven-qa
+      task: kaven-qa-add-test
+      depends_on: [api-endpoints, frontend-pages]
+      description: |
+        Write comprehensive tests:
+        - Unit tests for service logic
+        - Integration tests for API endpoints
+        - Multi-tenant isolation tests
+        - IDOR protection tests
+        - Edge case coverage
+      actions:
+        - create_unit_tests: "apps/api/src/services/__tests__/{{feature_name}}.test.ts"
+        - create_integration_tests: "apps/api/src/routes/__tests__/{{feature_name}}.integration.test.ts"
+        - create_isolation_tests: true
+        - run: pnpm test
+        - verify_coverage: { lines: 80, functions: 80, branches: 75 }
+      outputs:
+        - test_files
+        - coverage_report
+
+    - id: security-check
+      name: Security Validation
+      agent: kaven-qa
+      task: kaven-qa-run-security
+      depends_on: [tests]
+      description: |
+        Run security test suites:
+        - IDOR protection (ownership verification)
+        - CSRF validation
+        - SQL injection (parameterized queries)
+        - XSS (input sanitization)
+        - Multi-tenant isolation
+      actions:
+        - run: pnpm test:security
+        - run: pnpm test:gdpr
+        - validate_middleware_stack: "{{endpoint_list}}"
+      outputs:
+        - security_report
+
+    - id: ci-check
+      name: CI Pipeline Verification
+      agent: kaven-devops
+      task: kaven-devops-ci-check
+      depends_on: [security-check]
+      description: |
+        Run full CI pipeline locally:
+        - Lint (ESLint + Prettier)
+        - Typecheck (TypeScript strict)
+        - All tests
+        - Build verification
+      actions:
+        - run: pnpm lint
+        - run: pnpm typecheck
+        - run: pnpm test
+        - run: pnpm build
+      outputs:
+        - ci_report
+        - ready_for_pr
+
+    - id: update-story
+      name: Update Story Progress
+      agent: kaven-architect
+      depends_on: [ci-check]
+      description: Mark story checkboxes as complete, update file list
+      actions:
+        - update_story: "{{story_file}}"
+        - mark_complete: all_criteria
+        - update_file_list: true
+
+  completion:
+    evidence_bundle:
+      - git_diff: true
+      - test_results: true
+      - coverage_report: true
+      - security_report: true
+      - ci_report: true
+    commit_message: "feat: {{feature_name}} [{{story_id}}]"
+    pr_template: |
+      ## {{story_id}}: {{feature_name}}
+
+      ### Changes
+      - Schema: {{schema_changes}}
+      - API: {{endpoint_list}}
+      - Frontend: {{component_list}}
+      - Tests: {{test_files}}
+
+      ### Evidence
+      - [ ] All tests passing
+      - [ ] Security tests passing
+      - [ ] GDPR tests passing
+      - [ ] Coverage targets met
+      - [ ] CI pipeline green

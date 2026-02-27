@@ -35,6 +35,8 @@
     "@mui/joy": "^5.0.0-beta.52",
     "@next/bundle-analyzer": "~15.1.12",
     "@prisma/client": "~5.22.0",
+    "@supabase/ssr": "^0.8.0",
+    "@supabase/supabase-js": "^2.98.0",
     "@tanstack/react-query": "5.90.10",
     "@tanstack/react-virtual": "^3.13.18",
     "@trpc/client": "11.5.1",

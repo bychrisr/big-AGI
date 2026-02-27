@@ -6,30 +6,55 @@ import { getDomainModelIdOrThrow } from '~/common/stores/llms/store-llms';
 import { messageFragmentsReduceText } from '~/common/stores/chat/chat.message';
 
 
+/** Derive a quick title from the first user message — no LLM needed. */
+function titleFromFirstMessage(conversationId: string): string | null {
+  const conversation = getConversation(conversationId);
+  if (!conversation) return null;
+  const firstUser = excludeSystemMessages(conversation.messages).find(m => m.role === 'user');
+  if (!firstUser) return null;
+  const text = messageFragmentsReduceText(firstUser.fragments).trim();
+  if (!text) return null;
+  // First line, capped at 60 chars
+  const line = text.split('\n')[0]?.trim() ?? text;
+  return line.length > 60 ? line.slice(0, 57) + '…' : line;
+}
+
+
 /**
- * Creates the AI titles for conversations, by taking the last 5 first-lines and asking AI what's that about
- * @returns true if the title was actually replaced (for instance, it may not be needed)
+ * Auto-titles a conversation:
+ * 1. Immediately sets title from first user message (always works, no LLM needed).
+ * 2. Refines with AI-generated title if a fast model is available.
  */
 export async function autoConversationTitle(conversationId: string, forceReplace: boolean): Promise<boolean> {
 
-  // use valid fast model
-  let autoTitleLlmId;
-  try {
-    autoTitleLlmId = getDomainModelIdOrThrow(['fastUtil'], false, false, 'conversation-titler');
-  } catch (error) {
-    console.log(`autoConversationTitle: ${error}`);
-    return false;
-  }
-
-  // only operate on valid conversations, without any title
   const conversation = getConversation(conversationId);
-  if (!conversation || (!forceReplace && (conversation.autoTitle || conversation.userTitle)))
+  if (!conversation) return false;
+
+  // Skip if title already set (unless forced)
+  if (!forceReplace && (conversation.autoTitle || conversation.userTitle))
     return false;
 
   const { setAutoTitle, setUserTitle } = useChatStore.getState();
+
   if (forceReplace) {
     setUserTitle(conversationId, '');
-    setAutoTitle(conversationId, '✏️...');
+  }
+
+  // Step 1: immediate fallback from first user message (always instant)
+  const fallbackTitle = titleFromFirstMessage(conversationId);
+  if (fallbackTitle && !forceReplace) {
+    setAutoTitle(conversationId, fallbackTitle);
+  } else if (forceReplace) {
+    setAutoTitle(conversationId, '✏️…');
+  }
+
+  // Step 2: try to refine with AI
+  let autoTitleLlmId: string;
+  try {
+    autoTitleLlmId = getDomainModelIdOrThrow(['fastUtil'], false, false, 'conversation-titler');
+  } catch {
+    // No fast model configured — fallback title is enough
+    return !!fallbackTitle;
   }
 
   // first line of the last 5 messages
@@ -41,10 +66,7 @@ export async function autoConversationTitle(conversationId: string, forceReplace
     return `- ${text}`;
   });
 
-
   try {
-
-    // LLM chat-generate call
     let title = await aixChatGenerateText_Simple(
       autoTitleLlmId,
       'You are an AI conversation titles assistant who specializes in creating expressive yet few-words chat titles.',
@@ -57,25 +79,22 @@ ${historyLines.join('\n')}
       'chat-ai-title', conversationId,
     );
 
-    // parse title
     title = title
       ?.trim()
       ?.replaceAll('"', '')
       ?.replace('Title: ', '')
       ?.replace('title: ', '');
 
-    // data write
     if (title) {
       setAutoTitle(conversationId, title);
       return true;
     }
 
   } catch (error: any) {
-    // not critical at all
-    console.log('Failed to auto-title conversation', conversationId, { error });
+    console.log('Failed to AI-title conversation', conversationId, { error });
     if (forceReplace)
-      setAutoTitle(conversationId, '');
+      setAutoTitle(conversationId, fallbackTitle ?? '');
   }
 
-  return false;
+  return !!fallbackTitle;
 }

@@ -17,6 +17,7 @@ const MAX_SAVED_PROMPTS = 100;
 export interface SimplePersona {
   id: string;
   name?: string;
+  description?: string; // Short description / specialty (used by synced personas)
   systemPrompt: string; // The system prompt is very important and required
   creationDate: string; // ISO string format
   pictureUrl?: string; // Optional picture URL
@@ -25,6 +26,8 @@ export interface SimplePersona {
   inputText: string;
   // llm used
   llmLabel?: string;
+  // sync source — 'mmos-sync' for personas imported from MMOS squad
+  source?: 'mmos-sync' | 'user';
 }
 
 export type SimplePersonaProvenance = {
@@ -44,6 +47,7 @@ interface AppPersonasStore {
 
   // actions
   prependSimplePersona: (systemPrompt: string, inputText: string, inputProvenance?: SimplePersonaProvenance, llmLabel?: string) => void;
+  importSyncedPersonas: (personas: Array<Pick<SimplePersona, 'id' | 'name' | 'description' | 'systemPrompt' | 'inputText'>>) => void;
   deleteSimplePersona: (id: string) => void;
   deleteSimplePersonas: (ids: Set<string>) => void;
 
@@ -77,6 +81,24 @@ const useAppPersonasStore = create<AppPersonasStore>()(persist(
         };
       }),
 
+    importSyncedPersonas: (incoming) =>
+      _set(state => {
+        const incomingIds = new Set(incoming.map(p => p.id));
+        // Keep manually created personas; replace existing synced ones
+        const kept = state.simplePersonas.filter(p => p.source !== 'mmos-sync' || !incomingIds.has(p.id));
+        const synced: SimplePersona[] = incoming.map(p => ({
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          systemPrompt: p.systemPrompt,
+          creationDate: new Date().toISOString(),
+          inputText: p.inputText,
+          source: 'mmos-sync' as const,
+        }));
+        const merged = [...synced, ...kept];
+        return { simplePersonas: merged.slice(0, MAX_SAVED_PROMPTS) };
+      }),
+
     deleteSimplePersona: (simplePersonaId: string) =>
       _set(state => ({
         simplePersonas: state.simplePersonas.filter(persona => persona.id !== simplePersonaId),
@@ -108,6 +130,10 @@ export function useSimplePersona(simplePersonaId: string) {
 
 export function prependSimplePersona(systemPrompt: string, inputText: string, inputProvenance?: SimplePersonaProvenance, llmLabel?: string) {
   useAppPersonasStore.getState().prependSimplePersona(systemPrompt, inputText, inputProvenance, llmLabel);
+}
+
+export function importSyncedPersonas(personas: Array<Pick<SimplePersona, 'id' | 'name' | 'description' | 'systemPrompt' | 'inputText'>>) {
+  useAppPersonasStore.getState().importSyncedPersonas(personas);
 }
 
 export function deleteSimplePersona(simplePersonaId: string) {

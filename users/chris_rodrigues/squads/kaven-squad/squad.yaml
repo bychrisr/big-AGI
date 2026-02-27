@@ -1,0 +1,88 @@
+name: kaven-squad
+version: 1.0.0
+description: >
+  Squad especialista no Kaven Framework — SaaS boilerplate enterprise-grade
+  com Fastify, Next.js, Prisma, multi-tenancy nativo, e 22+ features integradas.
+author: Kaven Team
+license: MIT
+slashPrefix: kaven
+documentation: README.md
+
+aios:
+  minVersion: "2.1.0"
+  type: squad
+
+components:
+  agents:
+    - kaven-architect.md
+    - kaven-api-dev.md
+    - kaven-frontend-dev.md
+    - kaven-db-engineer.md
+    - kaven-qa.md
+    - kaven-module-creator.md
+    - kaven-devops.md
+    - kaven-squad-lead.md
+  tasks:
+    - kaven-architect-review-feature.md
+    - kaven-architect-audit-security.md
+    - kaven-architect-consult-architecture.md
+    - kaven-api-dev-add-endpoint.md
+    - kaven-api-dev-add-service.md
+    - kaven-api-dev-add-middleware.md
+    - kaven-frontend-dev-add-page.md
+    - kaven-frontend-dev-add-component.md
+    - kaven-frontend-dev-add-hook.md
+    - kaven-frontend-dev-consult-design.md
+    - kaven-db-engineer-add-model.md
+    - kaven-db-engineer-add-migration.md
+    - kaven-db-engineer-audit-schema.md
+    - kaven-qa-run-security.md
+    - kaven-qa-run-gdpr.md
+    - kaven-qa-add-test.md
+    - kaven-qa-consult-quality.md
+    - kaven-module-creator-create-module.md
+    - kaven-module-creator-package-module.md
+    - kaven-devops-setup-env.md
+    - kaven-devops-ci-check.md
+    - kaven-squad-lead-consult.md
+    - kaven-squad-lead-consult-product.md
+    - kaven-squad-lead-consult-growth.md
+    - kaven-squad-lead-think.md
+    - kaven-squad-lead-challenge.md
+  workflows:
+    - kaven-new-feature.yaml
+    - kaven-new-module.yaml
+    - kaven-security-audit.yaml
+    - kaven-sprint-cycle.yaml
+    - kaven-design-council.yaml
+    - kaven-product-council.yaml
+    - kaven-architecture-council.yaml
+    - kaven-quality-council.yaml
+    - kaven-growth-council.yaml
+  checklists:
+    - new-feature-checklist.md
+    - security-review-checklist.md
+    - multi-tenant-checklist.md
+    - pr-review-checklist.md
+  templates:
+    - fastify-route-template.md
+    - prisma-model-template.md
+    - next-page-template.md
+    - next-component-template.md
+    - vitest-spec-template.md
+    - module-json-template.md
+    - zod-schema-template.md
+
+config:
+  coding-standards: config/coding-standards.md
+  tech-stack: config/tech-stack.md
+  source-tree: config/source-tree.md
+
+tags:
+  - saas-boilerplate
+  - multi-tenant
+  - fastify
+  - nextjs
+  - prisma
+  - enterprise
+  - kaven

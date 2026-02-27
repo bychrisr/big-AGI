@@ -12,12 +12,16 @@ import TelegramIcon from '@mui/icons-material/Telegram';
 
 import { SystemPurposeData, SystemPurposeExample, SystemPurposeId, SystemPurposes } from '../../../../data';
 
+import { fetchMindSystemPrompt, registeredMindIds, useMindsStore } from '~/modules/teamai/store-minds';
+import { warmMindCache } from '~/modules/teamai/store-memory-context';
+import type { MindMetadata } from '~/modules/teamai/store-minds';
 import { YouTubeURLInput } from '~/modules/youtube/YouTubeURLInput';
 import { bareBonesPromptMixer } from '~/modules/persona/pmix/pmix';
 
 import type { DConversationId } from '~/common/stores/chat/chat.conversation';
 import { ExpanderControlledBox } from '~/common/components/ExpanderControlledBox';
 import { createDMessageTextContent } from '~/common/stores/chat/chat.message';
+import { useFolderStore } from '~/common/stores/folders/store-chat-folders';
 import { lineHeightTextareaMd } from '~/common/app.theme';
 import { navigateToPersonas } from '~/common/app.routes';
 import { useChatStore } from '~/common/stores/chat/store-chats';
@@ -112,6 +116,68 @@ function Tile(props: {
 }
 
 
+// Formats squad directory names (e.g. "mmos-squad") to display labels ("MMOS Squad")
+function formatSquadLabel(squad: string): string {
+  return squad
+    .split(/[-_]/)
+    .map(word => word.toUpperCase() === word ? word : word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+
+function MindSquadSections(props: {
+  minds: MindMetadata[],
+  systemPurposeId: SystemPurposeId | null,
+  loadingMindId: string | null,
+  onMindSelected: (mindId: string) => void,
+}) {
+  // Group minds by squad (category field) — fall back to 'source' value
+  const bySquad = React.useMemo(() => {
+    const groups = new Map<string, MindMetadata[]>();
+    for (const mind of props.minds) {
+      const key = mind.category ?? (mind.source === 'custom' ? 'custom' : 'mmos-squad');
+      const group = groups.get(key) ?? [];
+      group.push(mind);
+      groups.set(key, group);
+    }
+    return groups;
+  }, [props.minds]);
+
+  return (
+    <>
+      {Array.from(bySquad.entries()).map(([squad, squadMinds]) => (
+        <React.Fragment key={squad}>
+          <Box sx={{ gridColumn: '1 / -1', mt: 2, mb: 0.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Typography level='title-sm'>
+              {formatSquadLabel(squad)}
+            </Typography>
+            <Typography level='body-xs' sx={{ color: 'text.tertiary' }}>
+              {squadMinds.length} minds
+            </Typography>
+          </Box>
+          {squadMinds.map((mind) => {
+            const isActive = props.systemPurposeId === mind.id;
+            const isLoading = props.loadingMindId === mind.id;
+            const purpose = SystemPurposes[mind.id];
+            return (
+              <Tile
+                key={'mind-' + mind.id}
+                text={isLoading ? '...' : mind.name}
+                symbol={purpose?.symbol ?? '🧠'}
+                isActive={isActive}
+                isEditMode={false}
+                isHighlighted={false}
+                onClick={() => props.onMindSelected(mind.id)}
+              />
+            );
+          })}
+        </React.Fragment>
+      ))}
+    </>
+  );
+}
+
+
 /**
  * Purpose selector for the current chat. Clicking on any item activates it for the current chat.
  */
@@ -125,6 +191,11 @@ export function PersonaSelector(props: {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [filteredIDs, setFilteredIDs] = React.useState<SystemPurposeId[] | null>(null);
   const [editMode, setEditMode] = React.useState(false);
+  const [loadingMindId, setLoadingMindId] = React.useState<string | null>(null);
+
+  // MMOS minds
+  const { minds, fetchMinds } = useMindsStore();
+  React.useEffect(() => { void fetchMinds(); }, [fetchMinds]);
 
 
   // external state
@@ -164,7 +235,9 @@ export function PersonaSelector(props: {
   }, [systemPurposeId]);
 
 
-  const unfilteredPurposeIDs = (filteredIDs && showPersonaFinder) ? filteredIDs : Object.keys(SystemPurposes) as SystemPurposeId[];
+  // Only show built-in personas in the main grid — exclude dynamically registered minds
+  const builtinIDs = (Object.keys(SystemPurposes) as SystemPurposeId[]).filter(id => !registeredMindIds.has(id));
+  const unfilteredPurposeIDs = (filteredIDs && showPersonaFinder) ? filteredIDs.filter(id => !registeredMindIds.has(id)) : builtinIDs;
   const visiblePurposeIDs = editMode ? unfilteredPurposeIDs : unfilteredPurposeIDs.filter(id => !hiddenPurposeIDs.includes(id));
   const hidePersonaCreator = hiddenPurposeIDs.includes(PURPOSE_ID_PERSONA_CREATOR);
 
@@ -199,6 +272,37 @@ export function PersonaSelector(props: {
   }, [props.conversationId, setSystemPurposeId]);
 
   const toggleEditMode = React.useCallback(() => setEditMode(on => !on), []);
+
+  // MMOS mind handler: fetch full system prompt, warm memory cache, then activate.
+  // Memory injection happens via store-memory-context (warmMindCache), not inline here.
+  // On every subsequent message send, _handleExecute refreshes memory via ensureFreshMindSystemMessage.
+  const handleMindSelected = React.useCallback(async (mindId: string) => {
+    if (!setSystemPurposeId) return;
+
+    // Activate immediately with the cached preview prompt (visible right away)
+    if (SystemPurposes[mindId]) {
+      setSystemPurposeId(props.conversationId, mindId);
+    }
+
+    setLoadingMindId(mindId);
+
+    const fullPrompt = await fetchMindSystemPrompt(mindId);
+
+    if (fullPrompt && SystemPurposes[mindId]) {
+      // Set base prompt for display (no memory yet)
+      SystemPurposes[mindId]!.systemMessage = fullPrompt;
+
+      // Warm cache: fetch memory block and update SystemPurposes with combined prompt.
+      // This pre-warms the cache so the first message uses fresh memory with no extra delay.
+      const activeFolder = useFolderStore.getState().folders.find(
+        f => f.conversationIds.includes(props.conversationId),
+      );
+      await warmMindCache(mindId, fullPrompt, activeFolder?.title);
+    }
+
+    setLoadingMindId(null);
+    setSystemPurposeId(props.conversationId, mindId);
+  }, [props.conversationId, setSystemPurposeId]);
 
 
   // Search (filtering)
@@ -331,6 +435,14 @@ export function PersonaSelector(props: {
             }}
           />
         )}
+
+        {/* Minds grouped by squad */}
+        {minds.length > 0 && <MindSquadSections
+          minds={minds}
+          systemPurposeId={systemPurposeId}
+          loadingMindId={loadingMindId}
+          onMindSelected={handleMindSelected}
+        />}
 
 
         {/* [row -3] Description */}

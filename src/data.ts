@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-export type SystemPurposeId = 'Catalyst' | 'Custom' | 'Designer' | 'Developer' | 'DeveloperPreview' | 'Executive' | 'Generic' | 'Scientist' | 'YouTubeTranscriber';
+export type SystemPurposeId = 'Catalyst' | 'Custom' | 'Designer' | 'Developer' | 'DeveloperPreview' | 'Executive' | 'Generic' | 'Scientist' | 'YouTubeTranscriber' | (string & {});
 
 export const defaultSystemPurposeId: SystemPurposeId = 'Generic';
 
@@ -19,7 +19,7 @@ export type SystemPurposeData = {
 
 export type SystemPurposeExample = string | { prompt: string, action?: 'require-data-attachment' };
 
-export const SystemPurposes: { [key in SystemPurposeId]: SystemPurposeData } = {
+export const SystemPurposes: Record<string, SystemPurposeData> = {
   Generic: {
     title: 'Default',
     description: 'Start here',
@@ -127,3 +127,12 @@ When asked to design or draw something, please work step by step detailing the c
   },
 
 };
+
+
+/**
+ * Dynamically registers an MMOS mind as a persona in SystemPurposes.
+ * Called at runtime when minds are loaded from /api/minds.
+ */
+export function registerMindPersona(mindId: string, data: SystemPurposeData): void {
+  (SystemPurposes as Record<string, SystemPurposeData>)[mindId] = data;
+}
