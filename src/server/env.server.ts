@@ -109,9 +109,13 @@ export const env = createEnv({
     ELEVENLABS_VOICE_ID: z.string().optional(),
 
 
-    // Backend: HTTP Basic Authentication
-    HTTP_BASIC_AUTH_USERNAME: z.string().optional(),
-    HTTP_BASIC_AUTH_PASSWORD: z.string().optional(),
+    // teamAI: Encryption secret for API keys stored in Supabase
+    // Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+    // Minimum 32 characters. Required when Supabase is configured.
+    ENCRYPTION_SECRET: z.string().min(32).optional(),
+
+    // teamAI: Supabase service role key (bypasses RLS for admin operations)
+    SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
 
     // AIX: Strict parsing mode - if omitted: strict in dev (throws on unknown API values), tolerant in prod (warns)
     // Set to 'true' to force strict mode in production (useful for debugging API drift)

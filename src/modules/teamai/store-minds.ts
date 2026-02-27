@@ -48,6 +48,11 @@ function getMindSymbol(mindId: string, index: number): string {
 }
 
 
+// Tracks which SystemPurposes IDs are dynamically registered minds (not built-in personas).
+// Used by PersonaSelector to exclude minds from the built-in personas grid.
+export const registeredMindIds = new Set<string>();
+
+
 export const useMindsStore = create<MindsStore>()((set, get) => ({
   minds: [],
   loading: false,
@@ -70,8 +75,9 @@ export const useMindsStore = create<MindsStore>()((set, get) => ({
       const data = await response.json() as { minds: MindMetadata[] };
       const minds = data.minds ?? [];
 
-      // Register each mind as a persona in SystemPurposes
+      // Register each mind as a persona in SystemPurposes and track the IDs
       minds.forEach((mind, index) => {
+        registeredMindIds.add(mind.id);
         registerMindPersona(mind.id, {
           title: mind.name,
           description: mind.specialty || 'MMOS Mind',

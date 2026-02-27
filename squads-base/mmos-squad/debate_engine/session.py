@@ -1,13 +1,18 @@
 """DebateSession: gerencia estado e caching de uma sessão de debate."""
 
+from __future__ import annotations
+
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from debate_engine.engine import DebateEngine, TurnResult
 from debate_engine.mind_loader import MindLoader
 from debate_engine.token_counter import SessionTokenUsage
+
+if TYPE_CHECKING:
+    from debate_engine.session_store import SessionStore
 
 
 @dataclass
@@ -42,6 +47,8 @@ class DebateSession:
         engine: DebateEngine,
         loader: MindLoader,
         session_id: str | None = None,
+        session_store: SessionStore | None = None,
+        user_id: str = "",
     ) -> None:
         """Inicializa sessão de debate.
 
@@ -51,12 +58,16 @@ class DebateSession:
             engine: DebateEngine configurado com API key.
             loader: MindLoader para carregar system prompts e KB.
             session_id: ID da sessão. Gerado automaticamente se None.
+            session_store: SessionStore opcional para persistência automática.
+            user_id: UUID do usuário autenticado (necessário se session_store for fornecido).
         """
         self.session_id = session_id or str(uuid.uuid4())
         self.topic = topic
         self.minds = minds
         self.engine = engine
         self.loader = loader
+        self.session_store = session_store
+        self.user_id = user_id
         self.turns: list[DebateTurn] = []
         self.token_usage = SessionTokenUsage()
         self.created_at = datetime.now(UTC).isoformat()
@@ -109,6 +120,10 @@ class DebateSession:
         )
         self.turns.append(turn)
         self.token_usage.add_turn(mind_slug, result.input_tokens, result.output_tokens)
+
+        # Auto-save após cada turno se SessionStore configurado
+        if self.session_store and self.user_id:
+            self.session_store.save(self.to_dict(), self.user_id)
 
         return result
 
@@ -170,4 +185,35 @@ class DebateSession:
                 t["mind_slug"], t["input_tokens"], t["output_tokens"]
             )
 
+        return session
+
+    @classmethod
+    def resume(
+        cls,
+        session_id: str,
+        engine: DebateEngine,
+        loader: MindLoader,
+        session_store: SessionStore,
+    ) -> "DebateSession":
+        """Retoma uma sessao salva no Supabase.
+
+        Args:
+            session_id: ID da sessao a retomar.
+            engine: DebateEngine configurado com API key.
+            loader: MindLoader para carregar system prompts e KB.
+            session_store: SessionStore para carregar e continuar persistindo.
+
+        Returns:
+            DebateSession reconstruida com historico de turnos.
+
+        Raises:
+            ValueError: Se a sessao nao for encontrada.
+        """
+        data = session_store.load(session_id)
+        if data is None:
+            msg = f"Sessao nao encontrada: {session_id}"
+            raise ValueError(msg)
+        session = cls.from_dict(data, engine=engine, loader=loader)
+        session.session_store = session_store
+        session.user_id = data.get("user_id", "")
         return session

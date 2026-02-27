@@ -1,7 +1,23 @@
 import * as z from 'zod/v4';
-import { createTRPCRouter, publicProcedure } from '../trpc.server';
-import { createSupabaseServerClient } from '~/common/supabase/server';
 import { TRPCError } from '@trpc/server';
+
+import { createSupabaseServerClient } from '~/common/supabase/server';
+import { decrypt, encrypt } from '~/server/utils/encryption.server';
+import { env } from '~/server/env.server';
+import { createTRPCRouter, publicProcedure } from '../trpc.server';
+
+
+/** Returns the encryption secret or throws in production. */
+function requireEncryptionSecret(): string {
+  const secret = env.ENCRYPTION_SECRET;
+  if (!secret) {
+    if (process.env['NODE_ENV'] === 'production')
+      throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'ENCRYPTION_SECRET not configured' });
+    // Dev mode: fall back to a fixed dev-only key (never used with real data)
+    return 'dev-mode-insecure-key-32-chars!!';
+  }
+  return secret;
+}
 
 
 export const apiKeysRouter = createTRPCRouter({
@@ -13,10 +29,13 @@ export const apiKeysRouter = createTRPCRouter({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Authentication required' });
 
+      const secret = requireEncryptionSecret();
+      const encryptedKey = encrypt(input.key, secret);
+
       const { error } = await supabase.from('user_api_keys').upsert({
         user_id: user.id,
         provider: input.provider,
-        encrypted_key: input.key,
+        encrypted_key: encryptedKey,
       }, { onConflict: 'user_id,provider' });
 
       if (error) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message });
@@ -38,7 +57,15 @@ export const apiKeysRouter = createTRPCRouter({
         .eq('provider', input.provider)
         .single();
 
-      return data?.encrypted_key ?? null;
+      if (!data?.encrypted_key) return null;
+
+      const secret = requireEncryptionSecret();
+      try {
+        return decrypt(data.encrypted_key, secret);
+      } catch {
+        // Key stored in old plaintext format (pre-encryption migration)
+        return data.encrypted_key;
+      }
     }),
 
   listProviders: publicProcedure
@@ -52,7 +79,7 @@ export const apiKeysRouter = createTRPCRouter({
         .select('provider')
         .eq('user_id', user.id);
 
-      return (data ?? []).map(r => r.provider);
+      return (data ?? []).map(r => r.provider as string);
     }),
 
   deleteKey: publicProcedure

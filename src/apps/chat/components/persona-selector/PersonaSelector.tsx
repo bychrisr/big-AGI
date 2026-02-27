@@ -12,7 +12,8 @@ import TelegramIcon from '@mui/icons-material/Telegram';
 
 import { SystemPurposeData, SystemPurposeExample, SystemPurposeId, SystemPurposes } from '../../../../data';
 
-import { fetchMindSystemPrompt, useMindsStore } from '~/modules/teamai/store-minds';
+import { fetchMindSystemPrompt, registeredMindIds, useMindsStore } from '~/modules/teamai/store-minds';
+import type { MindMetadata } from '~/modules/teamai/store-minds';
 import { YouTubeURLInput } from '~/modules/youtube/YouTubeURLInput';
 import { bareBonesPromptMixer } from '~/modules/persona/pmix/pmix';
 
@@ -113,6 +114,68 @@ function Tile(props: {
 }
 
 
+// Formats squad directory names (e.g. "mmos-squad") to display labels ("MMOS Squad")
+function formatSquadLabel(squad: string): string {
+  return squad
+    .split(/[-_]/)
+    .map(word => word.toUpperCase() === word ? word : word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+
+function MindSquadSections(props: {
+  minds: MindMetadata[],
+  systemPurposeId: SystemPurposeId | null,
+  loadingMindId: string | null,
+  onMindSelected: (mindId: string) => void,
+}) {
+  // Group minds by squad (category field) — fall back to 'source' value
+  const bySquad = React.useMemo(() => {
+    const groups = new Map<string, MindMetadata[]>();
+    for (const mind of props.minds) {
+      const key = mind.category ?? (mind.source === 'custom' ? 'custom' : 'mmos-squad');
+      const group = groups.get(key) ?? [];
+      group.push(mind);
+      groups.set(key, group);
+    }
+    return groups;
+  }, [props.minds]);
+
+  return (
+    <>
+      {Array.from(bySquad.entries()).map(([squad, squadMinds]) => (
+        <React.Fragment key={squad}>
+          <Box sx={{ gridColumn: '1 / -1', mt: 2, mb: 0.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Typography level='title-sm'>
+              {formatSquadLabel(squad)}
+            </Typography>
+            <Typography level='body-xs' sx={{ color: 'text.tertiary' }}>
+              {squadMinds.length} minds
+            </Typography>
+          </Box>
+          {squadMinds.map((mind) => {
+            const isActive = props.systemPurposeId === mind.id;
+            const isLoading = props.loadingMindId === mind.id;
+            const purpose = SystemPurposes[mind.id];
+            return (
+              <Tile
+                key={'mind-' + mind.id}
+                text={isLoading ? '...' : mind.name}
+                symbol={purpose?.symbol ?? '🧠'}
+                isActive={isActive}
+                isEditMode={false}
+                isHighlighted={false}
+                onClick={() => props.onMindSelected(mind.id)}
+              />
+            );
+          })}
+        </React.Fragment>
+      ))}
+    </>
+  );
+}
+
+
 /**
  * Purpose selector for the current chat. Clicking on any item activates it for the current chat.
  */
@@ -170,7 +233,9 @@ export function PersonaSelector(props: {
   }, [systemPurposeId]);
 
 
-  const unfilteredPurposeIDs = (filteredIDs && showPersonaFinder) ? filteredIDs : Object.keys(SystemPurposes) as SystemPurposeId[];
+  // Only show built-in personas in the main grid — exclude dynamically registered minds
+  const builtinIDs = (Object.keys(SystemPurposes) as SystemPurposeId[]).filter(id => !registeredMindIds.has(id));
+  const unfilteredPurposeIDs = (filteredIDs && showPersonaFinder) ? filteredIDs.filter(id => !registeredMindIds.has(id)) : builtinIDs;
   const visiblePurposeIDs = editMode ? unfilteredPurposeIDs : unfilteredPurposeIDs.filter(id => !hiddenPurposeIDs.includes(id));
   const hidePersonaCreator = hiddenPurposeIDs.includes(PURPOSE_ID_PERSONA_CREATOR);
 
@@ -359,33 +424,13 @@ export function PersonaSelector(props: {
           />
         )}
 
-        {/* MMOS Minds Section */}
-        {minds.length > 0 && (
-          <Box sx={{ gridColumn: '1 / -1', mt: 2, mb: 0.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Typography level='title-sm'>
-              MMOS Minds
-            </Typography>
-            <Typography level='body-xs' sx={{ color: 'text.tertiary' }}>
-              {minds.length} minds
-            </Typography>
-          </Box>
-        )}
-        {minds.map((mind) => {
-          const isActive = systemPurposeId === mind.id;
-          const isLoading = loadingMindId === mind.id;
-          const purpose = SystemPurposes[mind.id];
-          return (
-            <Tile
-              key={'mind-' + mind.id}
-              text={isLoading ? '...' : mind.name}
-              symbol={purpose?.symbol ?? '🧠'}
-              isActive={isActive}
-              isEditMode={false}
-              isHighlighted={false}
-              onClick={() => void handleMindSelected(mind.id)}
-            />
-          );
-        })}
+        {/* Minds grouped by squad */}
+        {minds.length > 0 && <MindSquadSections
+          minds={minds}
+          systemPurposeId={systemPurposeId}
+          loadingMindId={loadingMindId}
+          onMindSelected={handleMindSelected}
+        />}
 
 
         {/* [row -3] Description */}

@@ -34,6 +34,16 @@ ENV NEXT_PUBLIC_BUILD_HASH=${NEXT_PUBLIC_BUILD_HASH}
 ARG NEXT_PUBLIC_BUILD_REF_NAME
 ENV NEXT_PUBLIC_BUILD_REF_NAME=${NEXT_PUBLIC_BUILD_REF_NAME}
 
+# teamAI: path to repo volume mount (read-only, contains minds and squads)
+# Set this at runtime via docker-compose env_file or -e TEAMAI_REPO_PATH=/app/teamai-repo
+ENV TEAMAI_REPO_PATH=/app/teamai-repo
+
+# teamAI: Supabase Auth configuration (required for production)
+ARG NEXT_PUBLIC_SUPABASE_URL
+ENV NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+
 # Optional argument to configure GA4 at build time (see: docs/deploy-analytics.md)
 ARG NEXT_PUBLIC_GA4_MEASUREMENT_ID
 ENV NEXT_PUBLIC_GA4_MEASUREMENT_ID=${NEXT_PUBLIC_GA4_MEASUREMENT_ID}
