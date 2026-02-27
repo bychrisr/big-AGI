@@ -36,7 +36,13 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
-  const publicPaths = ['/login', '/auth/', '/api/health', '/_next', '/favicon.ico', '/images'];
+  const publicPaths = [
+    '/login', '/auth/', '/api/health', '/_next', '/favicon.ico', '/images',
+    // big-agi infrastructure routes (use client-side API keys, not Supabase auth)
+    '/api/edge/', '/api/cloud/', '/api/trpc/',
+    // static public files
+    '/manifest.json', '/robots.txt', '/sitemap',
+  ];
   const isPublicPath = publicPaths.some(p => pathname.startsWith(p));
 
   if (!user && !isPublicPath) {
