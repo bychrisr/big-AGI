@@ -1,8 +1,9 @@
 """Testes para SilentCheckpoint."""
 
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -289,3 +290,63 @@ def test_commit_dedup_always_commits_new_key(
         "user-1", [MemoryCandidate(key="nova_chave", value="valor", confidence=0.80)]
     )
     assert committed == 1
+
+
+# ─── Task 2.5 / 5.5: _topic_resumed ─────────────────────────────────────────
+
+def test_topic_resumed_after_4_days(checkpoint: SilentCheckpoint) -> None:
+    """Tópico retomado após 4 dias gera candidate com confidence 0.70."""
+    five_days_ago = (datetime.now(UTC) - timedelta(days=5)).isoformat()
+
+    mock_client = MagicMock()
+    mock_client.table.return_value.select.return_value \
+        .eq.return_value.lt.return_value.execute.return_value.data = [
+        {"topic": "cache strategy", "created_at": five_days_ago},
+    ]
+
+    env_patch = {
+        "SUPABASE_URL": "https://fake.supabase.co",
+        "SUPABASE_SERVICE_ROLE_KEY": "fake-key",
+    }
+    with patch.dict("os.environ", env_patch), \
+         patch("supabase.create_client", return_value=mock_client):
+        session = DebateSessionData(
+            turns=[{"role": "user"}],
+            user_messages=["vamos falar de cache"],
+            topic="cache strategy",
+            user_id="user-123",
+        )
+        candidates = checkpoint.analyze(session)
+
+    resumed = [c for c in candidates if c.source_trigger == "topic_resumed"]
+    assert len(resumed) == 1
+    assert resumed[0].confidence == 0.70
+    assert resumed[0].key == "topico_recorrente"
+
+
+def test_topic_resumed_returns_false_without_supabase(
+    checkpoint: SilentCheckpoint,
+) -> None:
+    """Sem Supabase configurado, _topic_resumed retorna False."""
+    session = DebateSessionData(
+        turns=[],
+        user_messages=[],
+        topic="some topic",
+        user_id="user-123",
+    )
+    # Sem env vars de Supabase, deve retornar False
+    with patch.dict("os.environ", {}, clear=True):
+        assert checkpoint._topic_resumed(session) is False
+
+
+def test_topic_resumed_returns_false_without_topic(
+    checkpoint: SilentCheckpoint,
+) -> None:
+    """Sem topic na sessão, _topic_resumed retorna False."""
+    session = DebateSessionData(
+        turns=[],
+        user_messages=[],
+        topic="",
+        user_id="user-123",
+    )
+    assert checkpoint._topic_resumed(session) is False

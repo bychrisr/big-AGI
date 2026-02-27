@@ -179,6 +179,8 @@ import sys, json, os, uuid
 sys.path.insert(0, '${enginePath}')
 sys.path.insert(0, '${scriptsPath}')
 os.environ.setdefault('ANTHROPIC_API_KEY', '${anthropicApiKey}')
+os.environ.setdefault('SUPABASE_URL', '${supabaseUrl}')
+os.environ.setdefault('SUPABASE_SERVICE_ROLE_KEY', '${supabaseServiceRoleKey}')
 
 from debate_engine.engine import DebateEngine
 from debate_engine.mind_loader import MindLoader
@@ -271,7 +273,7 @@ if turns and ${JSON.stringify(hasSupabase)}:
         sb_cp = create_client('${supabaseUrl}', '${supabaseServiceRoleKey}')
         ms = MemoryStore(sb_cp)
         checkpoint = SilentCheckpoint(ms)
-        session_data = DebateSessionData(turns=turns, user_messages=[user_message])
+        session_data = DebateSessionData(turns=turns, user_messages=[user_message], topic=topic, user_id='${userId}')
         candidates = checkpoint.analyze(session_data)
         checkpoint.commit('${userId}', candidates)
     except Exception as e:

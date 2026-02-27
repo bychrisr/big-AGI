@@ -80,6 +80,30 @@ class CrossProjectContextProvider:
         """Reset do histórico de notificações (nova sessão)."""
         self._notified_insights.clear()
 
+    async def load_user_projects(self, user_id: str) -> list[dict]:
+        """Busca projetos do usuário da tabela user_projects no Supabase.
+
+        Requer SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY nas env vars.
+        Fallback: retorna lista vazia se Supabase não disponível.
+        """
+        import os
+        try:
+            supabase_url = os.environ.get('SUPABASE_URL', '')
+            service_key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '')
+            if not supabase_url or not service_key:
+                return []
+
+            from supabase import create_client
+            client = create_client(supabase_url, service_key)
+            result = client.table('user_projects') \
+                .select('project_name, claude_md, patterns') \
+                .eq('user_id', user_id) \
+                .execute()
+            return result.data or []
+        except Exception as e:
+            print(f"[CrossProjectContextProvider] load_user_projects failed: {e}")
+            return []
+
     async def find_relevant_past_decision(
         self,
         current_project: str,

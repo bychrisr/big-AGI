@@ -2,8 +2,10 @@
 
 import asyncio
 import logging
+import os
 import re
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -29,6 +31,8 @@ class DebateSessionData:
 
     turns: list[dict[str, Any]] = field(default_factory=list)
     user_messages: list[str] = field(default_factory=list)
+    topic: str = ""
+    user_id: str = ""
 
 
 # Padrões de correção de output
@@ -94,6 +98,16 @@ class SilentCheckpoint:
                     value=f"tema debatido em profundidade ({len(session.turns)} turnos)",
                     confidence=0.60,
                     source_trigger="theme_expanded",
+                )
+            )
+
+        if self._topic_resumed(session):
+            candidates.append(
+                MemoryCandidate(
+                    key="topico_recorrente",
+                    value=f"tópico retomado após pausa: {session.topic or 'sem tópico'}",
+                    confidence=0.70,
+                    source_trigger="topic_resumed",
                 )
             )
 
@@ -198,6 +212,47 @@ class SilentCheckpoint:
 
     def _detect_theme_expanded(self, session: DebateSessionData) -> bool:
         return len(session.turns) > 5
+
+    def _topic_resumed(self, session: DebateSessionData) -> bool:
+        """Detecta se tópico foi retomado após >3 dias.
+
+        Compara session.topic com debate_sessions anteriores do usuário
+        no Supabase. Retorna True se o mesmo tópico aparece em sessão
+        com created_at > 3 dias atrás.
+
+        Fallback: False se Supabase não disponível ou sem topic/user_id.
+        """
+        if not session.topic or not session.user_id:
+            return False
+
+        try:
+            supabase_url = os.environ.get('SUPABASE_URL', '')
+            service_key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '')
+            if not supabase_url or not service_key:
+                return False
+
+            from supabase import create_client
+            client = create_client(supabase_url, service_key)
+
+            three_days_ago = (
+                datetime.now(UTC) - timedelta(days=3)
+            ).isoformat()
+
+            result = client.table('debate_sessions') \
+                .select('topic, created_at') \
+                .eq('user_id', session.user_id) \
+                .lt('created_at', three_days_ago) \
+                .execute()
+
+            topic_lower = session.topic.lower()
+            for row in (result.data or []):
+                if topic_lower in row.get('topic', '').lower():
+                    return True
+
+            return False
+        except Exception as e:
+            logger.debug("_topic_resumed check failed: %s", e)
+            return False
 
     def _extract_preferred_format(self, message: str) -> str | None:
         """Extrai o formato preferido de uma mensagem de pedido de reformatação.
