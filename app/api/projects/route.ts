@@ -18,7 +18,7 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
 
   const { data, error } = await supabase
     .from('user_projects')
-    .select('project_name, patterns, updated_at')
+    .select('project_name, claude_md, patterns, updated_at')
     .eq('user_id', user.id)
     .order('updated_at', { ascending: false });
 

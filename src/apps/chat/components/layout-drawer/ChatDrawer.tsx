@@ -23,6 +23,7 @@ import { useChatStore } from '~/common/stores/chat/store-chats';
 import { CloseablePopup } from '~/common/components/CloseablePopup';
 import { DFolder, useFolderStore } from '~/common/stores/folders/store-chat-folders';
 import { DebateSessionsSection } from '~/modules/teamai/DebateSessionsSection';
+import { MemoriesPanel } from '~/modules/teamai/MemoriesPanel';
 import { DebouncedInputMemo } from '~/common/components/DebouncedInput';
 import { OPTIMA_DRAWER_BACKGROUND } from '~/common/layout/optima/optima.config';
 import { OptimaDrawerHeader } from '~/common/layout/optima/drawer/OptimaDrawerHeader';
@@ -530,6 +531,9 @@ function ChatDrawer(props: {
       onOpenSession={handleOpenDebateSession}
       onNewSession={handleNewDebateSession}
     />
+
+    {/* teamAI: Memories Panel — what the system learned about the user */}
+    <MemoriesPanel />
 
 
     {/* [Menu] Chat Item Folder Change */}

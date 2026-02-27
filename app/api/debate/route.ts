@@ -262,6 +262,21 @@ if turns and ${JSON.stringify(hasSupabase)}:
         # Silent — nao bloquear o streaming
         sys.stderr.write(f'[debate] Session save failed: {e}\\n')
 
+# Silent checkpoint: detectar padroes implicitos de preferencia do usuario
+if turns and ${JSON.stringify(hasSupabase)}:
+    try:
+        from supabase import create_client
+        from memory_store import MemoryStore
+        from silent_checkpoint import SilentCheckpoint, DebateSessionData
+        sb_cp = create_client('${supabaseUrl}', '${supabaseServiceRoleKey}')
+        ms = MemoryStore(sb_cp)
+        checkpoint = SilentCheckpoint(ms)
+        session_data = DebateSessionData(turns=turns, user_messages=[user_message])
+        candidates = checkpoint.analyze(session_data)
+        checkpoint.commit('${userId}', candidates)
+    except Exception as e:
+        sys.stderr.write(f'[debate] Checkpoint failed: {e}\\n')
+
 print(json.dumps({'type': 'done', 'mind_slug': ''}))
 `;
 }

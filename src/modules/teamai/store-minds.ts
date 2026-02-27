@@ -130,7 +130,27 @@ export async function buildMemoryContextBlock(activeFolderTitle?: string): Promi
     }
   } catch { /* silent */ }
 
-  // 2. Recent debate sessions for active project
+  // 2. Project CLAUDE.md context
+  if (activeFolderTitle) {
+    try {
+      const projRes = await fetch('/api/projects');
+      if (projRes.ok) {
+        const projData = await projRes.json() as {
+          projects: Array<{ project_name: string; claude_md?: string | null }>
+        };
+        const project = projData.projects.find(
+          p => p.project_name.toLowerCase() === activeFolderTitle.toLowerCase()
+        );
+        if (project?.claude_md) {
+          // Truncate to avoid bloating the context (max 2000 chars)
+          const md = project.claude_md.slice(0, 2000);
+          parts.push(`## Contexto do Projeto — ${activeFolderTitle}\n\n${md}`);
+        }
+      }
+    } catch { /* silent */ }
+  }
+
+  // 3. Recent debate sessions for active project
   if (activeFolderTitle) {
     try {
       const debateRes = await fetch(`/api/debates?project=${encodeURIComponent(activeFolderTitle.toLowerCase())}`);
