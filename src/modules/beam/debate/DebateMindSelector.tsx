@@ -26,6 +26,8 @@ export function DebateMindSelector(props: {
   preselectedIds?: string[];
   /** Topic from agent command, shown as context */
   topic?: string;
+  /** When true, skips the UI and starts the debate automatically once minds load */
+  autoStart?: boolean;
 }) {
 
   // state
@@ -35,6 +37,10 @@ export function DebateMindSelector(props: {
   );
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+
+  // stable ref to avoid stale closure in auto-start effect
+  const onStartRef = React.useRef(props.onStart);
+  onStartRef.current = props.onStart;
 
 
   // load minds from /api/minds on mount
@@ -75,6 +81,17 @@ export function DebateMindSelector(props: {
     return () => { cancelled = true; };
   }, []);
 
+  // auto-start: fire immediately once minds load when triggered by agent command
+  const { autoStart, preselectedIds } = props;
+  React.useEffect(() => {
+    if (!autoStart || loading || minds.length === 0) return;
+    const ids = new Set(preselectedIds ?? []);
+    const selected = minds.filter(m => ids.has(m.id));
+    if (selected.length >= MIN_MINDS) {
+      onStartRef.current(selected);
+    }
+  }, [autoStart, loading, minds, preselectedIds]);
+
 
   // handlers
 
@@ -108,6 +125,18 @@ export function DebateMindSelector(props: {
   const selectedCount = selectedIds.size;
   const canStart = selectedCount >= MIN_MINDS;
 
+  // when auto-starting, render a minimal loading state (no user interaction needed)
+  if (props.autoStart) {
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, p: 3 }}>
+        <CircularProgress size='sm' />
+        <Typography level='body-sm' sx={{ color: 'text.secondary' }}>
+          {loading ? 'Carregando minds…' : 'Iniciando debate…'}
+        </Typography>
+        {error && <InlineError error={error} />}
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: 2, minWidth: 360 }}>

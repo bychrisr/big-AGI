@@ -83,6 +83,7 @@ export function BeamScatterPane(props: {
   const [showDebateSelector, setShowDebateSelector] = React.useState(false);
   const [pendingPreselected, setPendingPreselected] = React.useState<string[] | undefined>(undefined);
   const [pendingTopic, setPendingTopic] = React.useState<string | undefined>(undefined);
+  const [pendingAutoStart, setPendingAutoStart] = React.useState(false);
 
   // listen for agent-triggered council debates (from *consult-X commands in Composer)
   const { pending: debateTrigger, clearPending } = useDebateTriggerStore();
@@ -90,6 +91,7 @@ export function BeamScatterPane(props: {
     if (debateTrigger) {
       setPendingPreselected(debateTrigger.mindIds);
       setPendingTopic(debateTrigger.topic || undefined);
+      setPendingAutoStart(debateTrigger.autoStart);
       setShowDebateSelector(true);
       clearPending();
     }
@@ -243,6 +245,7 @@ export function BeamScatterPane(props: {
               onCancel={handleDebateSelectorCancel}
               preselectedIds={pendingPreselected}
               topic={pendingTopic}
+              autoStart={pendingAutoStart}
             />
           </ModalDialog>
         </Modal>
