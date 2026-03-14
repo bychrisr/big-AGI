@@ -8,6 +8,8 @@ export interface PendingDebate {
   topic: string;
   /** Mind IDs to pre-select in DebateMindSelector */
   mindIds: string[];
+  /** When true, debate starts immediately without user confirmation */
+  autoStart: boolean;
 }
 
 interface DebateTriggerState {

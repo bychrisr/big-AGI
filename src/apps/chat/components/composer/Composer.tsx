@@ -469,6 +469,7 @@ export function Composer(props: {
           council: agentCmd.council,
           topic: agentCmd.topic,
           mindIds: council.mindIds,
+          autoStart: true,
         });
         _handleClearText();
         // Open beam to show DebateMindSelector with council pre-selected
