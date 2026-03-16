@@ -21,6 +21,8 @@ import { buildMemoryContextBlock, fetchMindSystemPrompt } from './store-minds';
 /** 2-minute TTL for the memory context cache. */
 const CACHE_TTL_MS = 2 * 60 * 1000;
 
+type MemoryMode = 'general' | 'production' | 'trail' | 'consultation';
+
 interface CacheEntry {
   /** Raw system prompt without the memory block. */
   basePrompt: string;
@@ -30,24 +32,33 @@ interface CacheEntry {
   combined: string;
   /** Active folder title when this entry was built. */
   folderTitle: string | undefined;
+  /** Interaction mode when this entry was built. */
+  mode: MemoryMode;
   /** Unix timestamp of last fetch, for TTL check. */
   fetchedAt: number;
 }
 
-// Module-level cache (keyed by mindId). Not persisted — intentionally resets on page reload
+// Module-level cache (keyed by `${mindId}:${mode}`). Not persisted — intentionally resets on page reload
 // so the first message after reload always gets fresh memories.
 const _cache = new Map<string, CacheEntry>();
 
 
-function _isFresh(entry: CacheEntry, folderTitle: string | undefined): boolean {
-  return (Date.now() - entry.fetchedAt) < CACHE_TTL_MS && entry.folderTitle === folderTitle;
+function _cacheKey(mindId: string, mode: MemoryMode): string {
+  return `${mindId}:${mode}`;
+}
+
+
+function _isFresh(entry: CacheEntry, folderTitle: string | undefined, mode: MemoryMode): boolean {
+  return (Date.now() - entry.fetchedAt) < CACHE_TTL_MS
+    && entry.folderTitle === folderTitle
+    && entry.mode === mode;
 }
 
 
 /**
  * Returns a fresh combined system prompt (base + memory block) for the given mind.
  *
- * - Cache fresh (< 2 min, same folder): returns immediately, no API calls.
+ * - Cache fresh (< 2 min, same folder, same mode): returns immediately, no API calls.
  * - Cache stale: fetches memory block (reuses cached base prompt if available),
  *   updates cache, returns combined.
  *
@@ -56,23 +67,25 @@ function _isFresh(entry: CacheEntry, folderTitle: string | undefined): boolean {
 export async function ensureFreshMindSystemMessage(
   mindId: string,
   folderTitle: string | undefined,
+  mode: MemoryMode = 'general',
 ): Promise<string | null> {
-  const cached = _cache.get(mindId);
+  const key = _cacheKey(mindId, mode);
+  const cached = _cache.get(key);
 
-  if (cached && _isFresh(cached, folderTitle)) {
+  if (cached && _isFresh(cached, folderTitle, mode)) {
     return cached.combined;
   }
 
   // Fetch base prompt (only if not cached) and memory block in parallel
   const [basePrompt, memoryBlock] = await Promise.all([
     cached?.basePrompt ? Promise.resolve(cached.basePrompt) : fetchMindSystemPrompt(mindId),
-    buildMemoryContextBlock(folderTitle),
+    buildMemoryContextBlock(folderTitle, mode),
   ]);
 
   if (!basePrompt) return null;
 
   const combined = basePrompt + memoryBlock;
-  _cache.set(mindId, { basePrompt, memoryBlock, combined, folderTitle, fetchedAt: Date.now() });
+  _cache.set(key, { basePrompt, memoryBlock, combined, folderTitle, mode, fetchedAt: Date.now() });
   return combined;
 }
 
@@ -88,11 +101,13 @@ export async function warmMindCache(
   mindId: string,
   basePrompt: string,
   folderTitle: string | undefined,
+  mode: MemoryMode = 'general',
 ): Promise<void> {
-  const memoryBlock = await buildMemoryContextBlock(folderTitle);
+  const memoryBlock = await buildMemoryContextBlock(folderTitle, mode);
   const combined = basePrompt + memoryBlock;
+  const key = _cacheKey(mindId, mode);
 
-  _cache.set(mindId, { basePrompt, memoryBlock, combined, folderTitle, fetchedAt: Date.now() });
+  _cache.set(key, { basePrompt, memoryBlock, combined, folderTitle, mode, fetchedAt: Date.now() });
 
   // Update SystemPurposes so inlineUpdatePurposeInHistory uses the fresh combined prompt
   if (SystemPurposes[mindId]) {
@@ -101,7 +116,17 @@ export async function warmMindCache(
 }
 
 
-/** Clears the cache entry for a specific mind (e.g., after explicit memory save). */
-export function invalidateMindCache(mindId: string): void {
-  _cache.delete(mindId);
+/**
+ * Clears the cache entry for a specific mind + mode combination.
+ * Pass mode='*' to clear all modes for that mind.
+ */
+export function invalidateMindCache(mindId: string, mode?: MemoryMode | '*'): void {
+  if (!mode || mode === '*') {
+    // Clear all cache entries for this mind across all modes
+    for (const key of _cache.keys()) {
+      if (key.startsWith(`${mindId}:`)) _cache.delete(key);
+    }
+  } else {
+    _cache.delete(_cacheKey(mindId, mode));
+  }
 }
