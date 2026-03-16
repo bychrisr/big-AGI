@@ -114,15 +114,25 @@ export async function fetchMindSystemPrompt(mindId: string): Promise<string | nu
  * Fetches user memories + recent debate sessions and builds a context block
  * to be appended to any mind's system prompt.
  * This is the "Memory Layer" that Steave and all minds reference.
+ *
+ * @param activeFolderTitle - Active project folder (for CLAUDE.md + debates context)
+ * @param mode - Interaction mode to scope memories ('general' | 'production' | 'trail' | 'consultation')
+ *               When provided (non-general), fetches mode-specific + general memories.
  */
-export async function buildMemoryContextBlock(activeFolderTitle?: string): Promise<string> {
+export async function buildMemoryContextBlock(
+  activeFolderTitle?: string,
+  mode: 'general' | 'production' | 'trail' | 'consultation' = 'general',
+): Promise<string> {
   const parts: string[] = [];
 
-  // 1. User memories
+  // 1. User memories — scoped by mode
   try {
-    const memRes = await fetch('/api/memory');
+    const url = mode !== 'general'
+      ? `/api/memory?mode=${encodeURIComponent(mode)}`
+      : '/api/memory?mode=general';
+    const memRes = await fetch(url);
     if (memRes.ok) {
-      const memData = await memRes.json() as { memories?: Array<{ key: string; value: string; confidence: number }> };
+      const memData = await memRes.json() as { memories?: Array<{ key: string; value: string; confidence: number; mode?: string }> };
       const memories = (memData.memories ?? []).filter(m => m.confidence >= 0.5);
       if (memories.length > 0) {
         parts.push('## Memórias do Usuário\n' + memories.map(m => `- **${m.key}**: ${m.value}`).join('\n'));

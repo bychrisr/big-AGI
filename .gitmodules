@@ -1,0 +1,3 @@
+[submodule "squads-aios"]
+	path = squads-aios
+	url = git@github.com:bychrisr/squads-aios.git
